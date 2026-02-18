@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<title>Perfil do Aluno • Bolsistas</title>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/config.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/ui.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="appNav"></div>
+
+<div class="container py-3">
+  <div id="toastArea"></div>
+
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-2">
+    <div>
+      <h1 class="h4 mb-1" style="color:var(--navy); font-weight:800;">Perfil do aluno</h1>
+      <div class="small-muted" id="subtitle">—</div>
+    </div>
+    <div class="no-print d-flex gap-2">
+      <button class="btn btn-outline-secondary" id="btnBack">Voltar</button>
+      <button class="btn btn-navy" id="btnPrint">Imprimir (PDF)</button>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="d-flex gap-3 align-items-center">
+        <img class="profile-photo" id="photo" alt="Foto">
+        <div class="flex-grow-1">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="h5 mb-0" id="name" style="font-weight:800;">—</div>
+            <span class="badge badge-navy" id="status">—</span>
+          </div>
+          <div class="small-muted" id="meta">—</div>
+          <div class="mt-2 d-flex flex-wrap gap-2 no-print" id="actions"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Competências (0–100)</strong>
+          <span class="small text-muted" id="lastEval">—</span>
+        </div>
+        <div class="card-body">
+          <canvas id="barChart" height="220"></canvas>
+          <div class="small text-muted mt-2">Notas convertidas: 0–10 → 0–100.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header"><strong>Linha do tempo (média)</strong></div>
+        <div class="card-body">
+          <canvas id="lineChart" height="220"></canvas>
+          <div class="small text-muted mt-2">Visual tipo monitor; cada ponto é uma avaliação registrada.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><strong>Resumo automático (3 linhas)</strong></div>
+        <div class="card-body">
+          <pre id="autoSummary" class="p-3 bg-light border rounded" style="white-space:pre-wrap; margin:0;">—</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><strong>Relatório escrito</strong></div>
+        <div class="card-body">
+          <div id="writtenReport" class="p-3 bg-light border rounded">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  const user = window.UI.requireAuth();
+  window.UI.mountNav("");
+
+  const studentId = window.UI.getParam("student_id");
+  if(!studentId){
+    window.UI.toast("Informe student_id na URL. Ex.: student.html?student_id=...", "err");
+    return;
+  }
+
+  document.getElementById("btnBack").addEventListener("click", ()=> window.history.length>1 ? window.history.back() : (window.location.href="students.html"));
+  document.getElementById("btnPrint").addEventListener("click", ()=> window.print());
+
+  const el = (id)=>document.getElementById(id);
+
+  let barChart = null;
+  let lineChart = null;
+
+  function safeParseJson(s){
+    try{ return JSON.parse(s || "{}"); }catch(e){ return {}; }
+  }
+
+  function mountActions(st){
+    const actions = el("actions");
+    actions.innerHTML = "";
+
+    const wa = st.whatsapp_link || "";
+    if(wa){
+      const a = document.createElement("a");
+      a.className = "btn btn-sm btn-outline-success";
+      a.target = "_blank";
+      a.href = wa;
+      a.textContent = "WhatsApp";
+      actions.appendChild(a);
+    }
+
+    if(user.role === "EDITOR"){
+      const a = document.createElement("a");
+      a.className = "btn btn-sm btn-outline-primary";
+      a.href = "editor.html?student_id=" + encodeURIComponent(st.student_id);
+      a.textContent = "Editar / Avaliar";
+      actions.appendChild(a);
+    }
+  }
+
+  function renderBar(compList, scoresById){
+    const labels = [];
+    const values = [];
+    compList.forEach(c=>{
+      labels.push(c.name);
+      const s = scoresById[c.comp_id];
+      values.push(s === undefined ? 0 : (Number(s)*10));
+    });
+
+    const ctx = document.getElementById("barChart");
+    if(barChart) barChart.destroy();
+    barChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "Pontuação (0-100)",
+          data: values,
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: { stepSize: 10 }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx)=> " " + ctx.raw + "/100"
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function renderLine(timeline){
+    const labels = timeline.map(p => window.Api.fmtDate(p.date));
+    const values = timeline.map(p => Number(p.avg_0_10 || 0) * 10);
+
+    const ctx = document.getElementById("lineChart");
+    if(lineChart) lineChart.destroy();
+    lineChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "Média (0-100)",
+          data: values,
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.05
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: { stepSize: 10 }
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+  }
+
+  try{
+    const [report, comps] = await Promise.all([
+      window.Api.apiPost("getStudentReport", { student_id: studentId }),
+      window.Api.apiPost("listCompetencies", { active_only: "TRUE" })
+    ]);
+
+    const st = report.student;
+    el("name").textContent = st.name || "—";
+    el("status").textContent = st.status || "—";
+    el("subtitle").textContent = (st.sector_current_name || "Sem setor") + " • " + (st.scholarship_type_name || "Sem bolsa");
+
+    const meta = [
+      st.sex ? ("Sexo: " + st.sex) : "",
+      st.age ? ("Idade: " + st.age) : "",
+      st.phone_display ? ("Tel: " + st.phone_display) : ""
+    ].filter(Boolean).join(" • ");
+    el("meta").textContent = meta || "—";
+
+    const photo = el("photo");
+    if(st.photo_url) photo.src = st.photo_url;
+    else photo.removeAttribute("src");
+
+    mountActions(st);
+
+    const latest = report.latest_evaluation;
+    if(latest){
+      el("lastEval").textContent = "Última: " + window.Api.fmtDate(latest.date) + (latest.period_tag ? (" • " + latest.period_tag) : "");
+      el("autoSummary").textContent = latest.auto_summary || "—";
+      el("writtenReport").textContent = latest.written_report || "—";
+
+      const scoresById = safeParseJson(latest.scores_json);
+      const compList = (comps.competencies || []).filter(c=>c.active==="TRUE");
+      renderBar(compList, scoresById);
+    } else {
+      el("lastEval").textContent = "Sem avaliações";
+      el("autoSummary").textContent = "—";
+      el("writtenReport").textContent = "—";
+      renderBar((comps.competencies||[]), {});
+    }
+
+    renderLine(report.timeline || []);
+
+  }catch(e){
+    window.UI.toast(e.message || String(e), "err");
+  }
+})();
+</script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

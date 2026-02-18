@@ -1,0 +1,22 @@
+Front-end (GitHub Pages)
+
+Arquivos:
+- login.html
+- index.html
+- students.html
+- student.html
+- editor.html
+- assets/config.js (API_URL)
+- assets/api.js, assets/ui.js, assets/app.css
+
+Como publicar:
+1) Crie um repositório no GitHub (pode ser privado com Pages? normalmente precisa ser público no plano grátis)
+2) Faça upload destes arquivos na raiz do repositório
+3) Settings -> Pages -> Deploy from branch -> main / root
+4) Abra o link do Pages.
+
+Config:
+- assets/config.js já está com a API_URL apontando para o seu Apps Script.
+
+Observação:
+- O token é enviado no body (padrão deste front).

@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<title>Editor • Bolsistas</title>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/config.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/ui.js"></script>
+
+</head>
+<body>
+<div id="appNav"></div>
+
+<div class="container py-3">
+  <div id="toastArea"></div>
+
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-2">
+    <div>
+      <h1 class="h4 mb-1" style="color:var(--navy); font-weight:800;">Editor</h1>
+      <div class="small-muted">Cadastro/edição, troca rápida de setor e avaliações.</div>
+    </div>
+    <div class="no-print d-flex gap-2">
+      <button class="btn btn-outline-secondary" id="btnRefresh">Atualizar listas</button>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header"><strong>Aluno (criar/atualizar)</strong></div>
+        <div class="card-body">
+          <form id="studentForm">
+            <div class="mb-2">
+              <label class="form-label">student_id (vazio para novo)</label>
+              <input class="form-control" id="st_id" placeholder="(deixe vazio para criar)">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Nome</label>
+              <input class="form-control" id="st_name" required>
+            </div>
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label">Sexo</label>
+                <select class="form-select" id="st_sex">
+                  <option value="">—</option>
+                  <option value="M">M</option>
+                  <option value="F">F</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label">Nascimento (yyyy-mm-dd)</label>
+                <input class="form-control" id="st_birth" placeholder="2008-05-12">
+              </div>
+            </div>
+            <div class="row g-2 mt-1">
+              <div class="col-12 col-md-6">
+                <label class="form-label">Telefone (com DDD)</label>
+                <input class="form-control" id="st_phone" placeholder="81999999999">
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Foto URL</label>
+                <input class="form-control" id="st_photo" placeholder="https://...">
+              </div>
+            </div>
+            <div class="row g-2 mt-1">
+              <div class="col-12 col-md-6">
+                <label class="form-label">Setor</label>
+                <select class="form-select" id="st_sector"></select>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Tipo de bolsa</label>
+                <select class="form-select" id="st_type"></select>
+              </div>
+            </div>
+            <div class="row g-2 mt-1">
+              <div class="col-6">
+                <label class="form-label">Carga (min)</label>
+                <input class="form-control" id="st_work" inputmode="numeric" placeholder="120">
+              </div>
+              <div class="col-6">
+                <label class="form-label">Status</label>
+                <select class="form-select" id="st_status">
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mt-3 d-grid gap-2">
+              <button class="btn btn-navy" type="submit">Salvar aluno</button>
+              <button class="btn btn-outline-secondary" type="button" id="btnLoadFromUrl">Carregar aluno da URL</button>
+            </div>
+
+            <div class="small text-muted mt-2">
+              Dica: abra um aluno em students.html e clique em “Editar / Avaliar” no perfil para trazer o student_id na URL.
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header"><strong>Troca rápida de setor (1 clique)</strong></div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Aluno</label>
+            <select class="form-select" id="qs_student"></select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Novo setor</label>
+            <select class="form-select" id="qs_sector"></select>
+          </div>
+          <button class="btn btn-outline-primary w-100" id="btnQuickSector">Trocar setor</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header"><strong>Avaliação (0–10) + resumo automático</strong></div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Aluno</label>
+            <select class="form-select" id="ev_student"></select>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Data</label>
+              <input class="form-control" id="ev_date" placeholder="yyyy-mm-dd">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Período (tag)</label>
+              <input class="form-control" id="ev_period" placeholder="2026-T1">
+            </div>
+          </div>
+
+          <div class="mt-3" id="scoresBox"></div>
+
+          <div class="mt-3">
+            <label class="form-label">Relatório escrito</label>
+            <textarea class="form-control" id="ev_written" rows="5" placeholder="Escreva aqui seu relatório..."></textarea>
+          </div>
+
+          <div class="mt-3 d-grid gap-2">
+            <button class="btn btn-navy" id="btnSaveEval">Salvar avaliação</button>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Resumo automático (prévia)</label>
+            <pre class="p-3 bg-light border rounded" id="ev_preview" style="white-space:pre-wrap; margin:0;">—</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header"><strong>Cadastros rápidos</strong></div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-12 col-md-4">
+              <label class="form-label">Novo setor</label>
+              <input class="form-control" id="new_sector_name" placeholder="Ex.: Biblioteca">
+              <button class="btn btn-outline-primary w-100 mt-2" id="btnAddSector">Adicionar</button>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label">Novo tipo de bolsa</label>
+              <input class="form-control" id="new_type_name" placeholder="Ex.: Igreja">
+              <button class="btn btn-outline-primary w-100 mt-2" id="btnAddType">Adicionar</button>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label">Nova competência</label>
+              <input class="form-control" id="new_comp_name" placeholder="Ex.: Assiduidade">
+              <button class="btn btn-outline-primary w-100 mt-2" id="btnAddComp">Adicionar</button>
+            </div>
+          </div>
+
+          <div class="small text-muted mt-3">
+            Esses botões chamam os endpoints upsert*. Para editar descrições/pesos depois, você pode expandir a UI ou ajustar direto na planilha.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  const user = window.UI.requireAuth(["EDITOR"]);
+  window.UI.mountNav("editor");
+
+  const el = (id)=>document.getElementById(id);
+  const urlStudentId = window.UI.getParam("student_id") || "";
+
+  function todayISO(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${dd}`;
+  }
+
+  el("ev_date").value = todayISO();
+
+  let cache = {
+    students: [],
+    sectors: [],
+    types: [],
+    comps: []
+  };
+
+  function fillSelect(sel, items, valueKey, labelKey, emptyLabel){
+    sel.innerHTML = "";
+    if(emptyLabel){
+      const opt0 = document.createElement("option");
+      opt0.value = "";
+      opt0.textContent = emptyLabel;
+      sel.appendChild(opt0);
+    }
+    items.forEach(it=>{
+      const opt = document.createElement("option");
+      opt.value = it[valueKey];
+      opt.textContent = it[labelKey];
+      sel.appendChild(opt);
+    });
+  }
+
+  function renderScores(){
+    const box = el("scoresBox");
+    box.innerHTML = "";
+    cache.comps.forEach(c=>{
+      const id = "score_" + c.comp_id;
+      const row = document.createElement("div");
+      row.className = "mb-2";
+
+      row.innerHTML = `
+        <label class="form-label d-flex justify-content-between">
+          <span>${window.Api.esc(c.name)}</span>
+          <span class="small text-muted" id="${id}_v">0</span>
+        </label>
+        <input type="range" class="form-range" min="0" max="10" step="1" value="0" id="${id}">
+      `;
+      box.appendChild(row);
+
+      const slider = document.getElementById(id);
+      const v = document.getElementById(id + "_v");
+      slider.addEventListener("input", ()=>{ v.textContent = slider.value; });
+    });
+  }
+
+  async function refreshAll(){
+    const [s, sec, t, c] = await Promise.all([
+      window.Api.apiPost("listStudents", { filters: { status:"ACTIVE" } }),
+      window.Api.apiPost("listSectors", {}),
+      window.Api.apiPost("listScholarshipTypes", {}),
+      window.Api.apiPost("listCompetencies", { active_only:"TRUE" })
+    ]);
+
+    cache.students = s.students || [];
+    cache.sectors = sec.sectors || [];
+    cache.types = t.scholarship_types || [];
+    cache.comps = c.competencies || [];
+
+    // selects
+    fillSelect(el("st_sector"), cache.sectors, "sector_id", "name", "—");
+    fillSelect(el("qs_sector"), cache.sectors, "sector_id", "name", "—");
+    fillSelect(el("st_type"), cache.types, "type_id", "name", "—");
+
+    fillSelect(el("qs_student"), cache.students, "student_id", "name", "—");
+    fillSelect(el("ev_student"), cache.students, "student_id", "name", "—");
+
+    // tenta pré-selecionar aluno por URL
+    if(urlStudentId){
+      el("st_id").value = urlStudentId;
+      el("qs_student").value = urlStudentId;
+      el("ev_student").value = urlStudentId;
+    }
+
+    renderScores();
+  }
+
+  // Carrega aluno da URL (para editar mais fácil)
+  el("btnLoadFromUrl").addEventListener("click", async ()=>{
+    const sid = el("st_id").value.trim();
+    if(!sid){ window.UI.toast("Informe um student_id.", "err"); return; }
+    try{
+      const rep = await window.Api.apiPost("getStudentReport", { student_id: sid });
+      const st = rep.student;
+      el("st_name").value = st.name || "";
+      el("st_sex").value = st.sex || "";
+      el("st_birth").value = st.birth_date || "";
+      el("st_phone").value = st.phone_display || st.phone_e164 || "";
+      el("st_photo").value = st.photo_url || "";
+      el("st_sector").value = st.sector_current_id || "";
+      el("st_type").value = st.scholarship_type_id || "";
+      el("st_work").value = st.workload_minutes || "";
+      el("st_status").value = st.status || "ACTIVE";
+      window.UI.toast("Aluno carregado.", "ok");
+    }catch(e){
+      window.UI.toast(e.message || String(e), "err");
+    }
+  });
+
+  // Salvar aluno (upsertStudent)
+  el("studentForm").addEventListener("submit", async (ev)=>{
+    ev.preventDefault();
+    const sectorId = el("st_sector").value;
+    const typeId = el("st_type").value;
+
+    const sectorName = sectorId ? (cache.sectors.find(x=>x.sector_id===sectorId)?.name || "") : "";
+    const typeName = typeId ? (cache.types.find(x=>x.type_id===typeId)?.name || "") : "";
+
+    const payload = {
+      student: {
+        student_id: el("st_id").value.trim(),
+        name: el("st_name").value.trim(),
+        sex: el("st_sex").value,
+        birth_date: el("st_birth").value.trim(),
+        phone: el("st_phone").value.trim(),
+        photo_url: el("st_photo").value.trim(),
+        sector_current_id: sectorId,
+        sector_current_name: sectorName,
+        scholarship_type_id: typeId,
+        scholarship_type_name: typeName,
+        workload_minutes: el("st_work").value.trim(),
+        status: el("st_status").value
+      }
+    };
+
+    try{
+      const res = await window.Api.apiPost("upsertStudent", payload);
+      if(!el("st_id").value.trim()) el("st_id").value = res.student_id;
+      window.UI.toast("Aluno salvo.", "ok");
+      await refreshAll();
+    }catch(e){
+      window.UI.toast(e.message || String(e), "err");
+    }
+  });
+
+  // Troca rápida de setor
+  el("btnQuickSector").addEventListener("click", async ()=>{
+    const sid = el("qs_student").value;
+    const secId = el("qs_sector").value;
+    if(!sid || !secId){ window.UI.toast("Selecione aluno e setor.", "err"); return; }
+
+    try{
+      await window.Api.apiPost("setStudentSector", { student_id: sid, sector_id: secId });
+      window.UI.toast("Setor atualizado.", "ok");
+      await refreshAll();
+    }catch(e){
+      window.UI.toast(e.message || String(e), "err");
+    }
+  });
+
+  // Salvar avaliação
+  el("btnSaveEval").addEventListener("click", async ()=>{
+    const sid = el("ev_student").value;
+    if(!sid){ window.UI.toast("Selecione um aluno.", "err"); return; }
+
+    const scores = {};
+    cache.comps.forEach(c=>{
+      const v = document.getElementById("score_" + c.comp_id).value;
+      scores[c.comp_id] = Number(v);
+    });
+
+    const evaluation = {
+      student_id: sid,
+      date: el("ev_date").value.trim() || todayISO(),
+      period_tag: el("ev_period").value.trim(),
+      scores: scores,
+      written_report: el("ev_written").value
+    };
+
+    try{
+      const res = await window.Api.apiPost("createEvaluation", { evaluation });
+      el("ev_preview").textContent = res.auto_summary || "—";
+      window.UI.toast("Avaliação salva.", "ok");
+    }catch(e){
+      window.UI.toast(e.message || String(e), "err");
+    }
+  });
+
+  // Cadastros rápidos
+  el("btnAddSector").addEventListener("click", async ()=>{
+    const name = el("new_sector_name").value.trim();
+    if(!name) return window.UI.toast("Informe o nome do setor.", "err");
+    try{
+      await window.Api.apiPost("upsertSector", { sector: { name } });
+      el("new_sector_name").value = "";
+      window.UI.toast("Setor adicionado.", "ok");
+      await refreshAll();
+    }catch(e){ window.UI.toast(e.message || String(e), "err"); }
+  });
+
+  el("btnAddType").addEventListener("click", async ()=>{
+    const name = el("new_type_name").value.trim();
+    if(!name) return window.UI.toast("Informe o nome do tipo de bolsa.", "err");
+    try{
+      await window.Api.apiPost("upsertScholarshipType", { scholarship_type: { name } });
+      el("new_type_name").value = "";
+      window.UI.toast("Tipo de bolsa adicionado.", "ok");
+      await refreshAll();
+    }catch(e){ window.UI.toast(e.message || String(e), "err"); }
+  });
+
+  el("btnAddComp").addEventListener("click", async ()=>{
+    const name = el("new_comp_name").value.trim();
+    if(!name) return window.UI.toast("Informe o nome da competência.", "err");
+    try{
+      await window.Api.apiPost("upsertCompetency", { competency: { name, weight: "1" } });
+      el("new_comp_name").value = "";
+      window.UI.toast("Competência adicionada.", "ok");
+      await refreshAll();
+    }catch(e){ window.UI.toast(e.message || String(e), "err"); }
+  });
+
+  el("btnRefresh").addEventListener("click", async ()=>{
+    try{
+      await refreshAll();
+      window.UI.toast("Listas atualizadas.", "ok");
+    }catch(e){ window.UI.toast(e.message || String(e), "err"); }
+  });
+
+  await refreshAll();
+})();
+</script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

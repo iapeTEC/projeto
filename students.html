@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<title>Alunos • Bolsistas</title>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/config.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/ui.js"></script>
+
+</head>
+<body>
+<div id="appNav"></div>
+<div class="container py-3">
+  <div id="toastArea"></div>
+
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-2">
+    <div>
+      <h1 class="h4 mb-1" style="color:var(--navy); font-weight:800;">Alunos</h1>
+      <div class="small-muted">Filtros e lista com botão WhatsApp. Clique no nome para abrir o perfil.</div>
+    </div>
+    <div class="no-print d-flex gap-2">
+      <button class="btn btn-outline-secondary" id="btnReset">Limpar filtros</button>
+      <button class="btn btn-navy" id="btnReload">Atualizar</button>
+    </div>
+  </div>
+
+  <div class="card mb-3" id="filters">
+    <div class="card-header"><strong>Filtros</strong></div>
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-12 col-md-4">
+          <label class="form-label">Busca (nome / telefone)</label>
+          <input class="form-control" id="f_q" placeholder="Ex.: Maria, 8199...">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="f_status">
+            <option value="">Todos</option>
+            <option value="ACTIVE" selected>Ativos</option>
+            <option value="INACTIVE">Inativos</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Sexo</label>
+          <select class="form-select" id="f_sex">
+            <option value="">Todos</option>
+            <option value="M">M</option>
+            <option value="F">F</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Setor</label>
+          <select class="form-select" id="f_sector">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label">Tipo de bolsa</label>
+          <select class="form-select" id="f_type">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Idade mínima</label>
+          <input class="form-control" id="f_age_min" inputmode="numeric" placeholder="Ex.: 14">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Idade máxima</label>
+          <input class="form-control" id="f_age_max" inputmode="numeric" placeholder="Ex.: 18">
+        </div>
+        <div class="col-12 col-md-4 d-flex align-items-end">
+          <button class="btn btn-navy w-100" id="btnApply">Aplicar filtros</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <strong>Lista</strong>
+      <span class="badge badge-navy" id="countBadge">—</span>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive d-none d-md-block">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Aluno</th>
+              <th>Setor</th>
+              <th>Bolsa</th>
+              <th>Idade</th>
+              <th>Telefone</th>
+              <th class="text-end">Contato</th>
+            </tr>
+          </thead>
+          <tbody id="tblBody"></tbody>
+        </table>
+      </div>
+
+      <div class="d-md-none" id="cardsList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const user = window.UI.requireAuth();
+  window.UI.mountNav("students");
+
+  const el = (id)=>document.getElementById(id);
+
+  function getFilters(){
+    const f = {
+      q: el("f_q").value.trim(),
+      status: el("f_status").value.trim(),
+      sex: el("f_sex").value.trim(),
+      sector_id: el("f_sector").value.trim(),
+      scholarship_type_id: el("f_type").value.trim(),
+      age_min: el("f_age_min").value.trim(),
+      age_max: el("f_age_max").value.trim()
+    };
+    // remove vazios
+    Object.keys(f).forEach(k => { if(f[k] === "") delete f[k]; });
+    return f;
+  }
+
+  async function loadMeta(){
+    try{
+      const sec = await window.Api.apiPost("listSectors", {});
+      const sel = el("f_sector");
+      sec.sectors.forEach(s=>{
+        const opt = document.createElement("option");
+        opt.value = s.sector_id;
+        opt.textContent = s.name;
+        sel.appendChild(opt);
+      });
+    }catch(e){}
+
+    try{
+      const t = await window.Api.apiPost("listScholarshipTypes", {});
+      const sel = el("f_type");
+      t.scholarship_types.forEach(x=>{
+        const opt = document.createElement("option");
+        opt.value = x.type_id;
+        opt.textContent = x.name;
+        sel.appendChild(opt);
+      });
+    }catch(e){}
+  }
+
+  function rowHtml(s){
+    const wa = s.whatsapp_link || "";
+    const phone = s.phone_display || s.phone_e164 || "";
+    const sector = s.sector_current_name || "";
+    const type = s.scholarship_type_name || "";
+    const age = s.age || "";
+    const href = "student.html?student_id=" + encodeURIComponent(s.student_id);
+
+    const btn = wa ? `<a class="btn btn-sm btn-outline-success" target="_blank" href="${wa}">WhatsApp</a>` : `<span class="text-muted small">—</span>`;
+
+    return `<tr>
+      <td>
+        <div class="fw-semibold"><a href="${href}">${window.Api.esc(s.name)}</a></div>
+        <div class="small text-muted">${window.Api.esc(s.student_id)}</div>
+      </td>
+      <td>${window.Api.esc(sector)}</td>
+      <td>${window.Api.esc(type)}</td>
+      <td>${window.Api.esc(age)}</td>
+      <td>${window.Api.esc(phone)}</td>
+      <td class="text-end">${btn}</td>
+    </tr>`;
+  }
+
+  function cardHtml(s){
+    const wa = s.whatsapp_link || "";
+    const phone = s.phone_display || s.phone_e164 || "";
+    const sector = s.sector_current_name || "";
+    const type = s.scholarship_type_name || "";
+    const age = s.age || "";
+    const href = "student.html?student_id=" + encodeURIComponent(s.student_id);
+
+    const btn = wa ? `<a class="btn btn-sm btn-outline-success" target="_blank" href="${wa}">WhatsApp</a>` : "";
+
+    return `<div class="card mb-2">
+      <div class="card-body">
+        <div class="d-flex justify-content-between gap-2">
+          <div>
+            <div class="fw-semibold"><a href="${href}">${window.Api.esc(s.name)}</a></div>
+            <div class="small text-muted">${window.Api.esc(sector)} • ${window.Api.esc(type)}</div>
+            <div class="small text-muted">Idade: ${window.Api.esc(age)} • Tel: ${window.Api.esc(phone)}</div>
+          </div>
+          <div class="text-end">
+            ${btn}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  async function loadStudents(){
+    el("tblBody").innerHTML = "";
+    el("cardsList").innerHTML = "";
+    el("countBadge").textContent = "Carregando...";
+
+    try{
+      const data = await window.Api.apiPost("listStudents", { filters: getFilters() });
+      el("countBadge").textContent = String(data.count || 0);
+
+      const rows = data.students || [];
+      el("tblBody").innerHTML = rows.map(rowHtml).join("");
+      el("cardsList").innerHTML = rows.map(cardHtml).join("");
+    }catch(e){
+      window.UI.toast(e.message || String(e), "err");
+      el("countBadge").textContent = "—";
+    }
+  }
+
+  function resetFilters(){
+    el("f_q").value = "";
+    el("f_status").value = "ACTIVE";
+    el("f_sex").value = "";
+    el("f_sector").value = "";
+    el("f_type").value = "";
+    el("f_age_min").value = "";
+    el("f_age_max").value = "";
+  }
+
+  el("btnApply").addEventListener("click", loadStudents);
+  el("btnReload").addEventListener("click", loadStudents);
+  el("btnReset").addEventListener("click", ()=>{ resetFilters(); loadStudents(); });
+
+  // Enter para aplicar
+  ["f_q","f_age_min","f_age_max"].forEach(id=>{
+    el(id).addEventListener("keydown",(ev)=>{ if(ev.key==="Enter") loadStudents(); });
+  });
+
+  (async function init(){
+    await loadMeta();
+    await loadStudents();
+  })();
+})();
+</script>
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>
