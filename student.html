@@ -215,7 +215,7 @@
   try{
     const [report, comps] = await Promise.all([
       window.Api.apiPost("getStudentReport", { student_id: studentId }),
-      window.Api.apiPost("listCompetencies", { active_only: "TRUE" })
+      window.Api.apiPost("listCompetencies", {})
     ]);
 
     const st = report.student;
