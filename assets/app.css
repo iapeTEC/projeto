@@ -106,26 +106,23 @@ a:hover{ color: var(--navy); }
 }
 
 @media print{
-  /* Remove navegação e botões */
   #appNav{ display:none !important; }
   .no-print{ display:none !important; }
 
-  /* Layout mais “seco” para caber em 1 página */
   html, body{ background:#fff !important; }
-  .container{ max-width: none !important; padding: 0 !important; }
+  .container{ max-width:none !important; padding:0 !important; }
+
+  body{ font-size: 11px !important; line-height: 1.2 !important; }
+  h1, .h1, h2, .h2, h3, .h3, h4, .h4{ margin:0 0 6px 0 !important; }
+  .small, .small-muted, .text-muted{ font-size: 10px !important; }
+
   .card{ box-shadow:none !important; border:1px solid #ddd !important; break-inside: avoid; page-break-inside: avoid; }
   .card-header{ padding: 6px 10px !important; }
   .card-body{ padding: 8px 10px !important; }
 
-  /* Tipografia menor */
-  h1, .h1, h2, .h2, h3, .h3, h4, .h4{ margin:0 0 6px 0 !important; }
-  body{ font-size: 11px !important; line-height: 1.2 !important; }
-  .small, .small-muted, .text-muted{ font-size: 10px !important; }
-
-  /* Reduz espaçamentos do grid */
   .row.g-3{ --bs-gutter-x: 10px; --bs-gutter-y: 10px; }
 
-  /* Força os 2 gráficos lado a lado na impressão (A4 costuma cair para 1 coluna) */
+  /* ===== Gráficos em 2 colunas e menores ===== */
   #chartsRow{
     display:flex !important;
     gap: 10px !important;
@@ -135,21 +132,43 @@ a:hover{ color: var(--navy); }
     flex: 0 0 50% !important;
     max-width: 50% !important;
   }
-
-  /* Gráficos menores e “quadrados” */
   #chartsRow canvas{
     width: 100% !important;
-    height: 230px !important;   /* ajuste fino: 210–250 conforme seu conteúdo */
-    max-height: 230px !important;
+    height: 210px !important;     /* menor para sobrar espaço para textos */
+    max-height: 210px !important;
   }
 
-  /* Evita quebra esquisita em textos longos */
-  pre{
-    white-space: pre-wrap !important;
+  /* ===== Resumo automático + Relatório escrito =====
+     Estratégia: reduzir fonte e limitar altura para caber em 1 página.
+     Se o texto for longo demais, será cortado na impressão. */
+  pre,
+  .report-text,
+  .written-report,
+  .auto-summary{
     font-size: 10px !important;
+    line-height: 1.15 !important;
     margin: 0 !important;
+    white-space: pre-wrap !important;
   }
 
-  /* Remove links sublinhados na impressão */
+  /* Caso seu HTML use <pre id="autoSummary"> e <pre id="writtenReport"> (ou similar),
+     estas regras pegam por id (não quebra nada se não existir). */
+  #autoSummary, #auto_summary, #ev_preview{
+    max-height: 90mm !important;
+    overflow: hidden !important;
+  }
+
+  #writtenReport, #written_report, #ev_written{
+    max-height: 60mm !important;
+    overflow: hidden !important;
+  }
+
+  /* Se o teu relatório escrito está dentro de um <div> ou <p>, use essa classe (opcional). */
+  .written-report{
+    max-height: 60mm !important;
+    overflow: hidden !important;
+  }
+
+  /* Evita sublinhado e URL expandida */
   a{ text-decoration:none !important; color:#000 !important; }
 }
