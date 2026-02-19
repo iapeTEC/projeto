@@ -95,3 +95,61 @@ a:hover{ color: var(--navy); }
   .card{ box-shadow:none; }
   a{ text-decoration:none; color:#000; }
 }
+
+/* =========================
+   PRINT (A4 / 1 página)
+   ========================= */
+
+@page{
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print{
+  /* Remove navegação e botões */
+  #appNav{ display:none !important; }
+  .no-print{ display:none !important; }
+
+  /* Layout mais “seco” para caber em 1 página */
+  html, body{ background:#fff !important; }
+  .container{ max-width: none !important; padding: 0 !important; }
+  .card{ box-shadow:none !important; border:1px solid #ddd !important; break-inside: avoid; page-break-inside: avoid; }
+  .card-header{ padding: 6px 10px !important; }
+  .card-body{ padding: 8px 10px !important; }
+
+  /* Tipografia menor */
+  h1, .h1, h2, .h2, h3, .h3, h4, .h4{ margin:0 0 6px 0 !important; }
+  body{ font-size: 11px !important; line-height: 1.2 !important; }
+  .small, .small-muted, .text-muted{ font-size: 10px !important; }
+
+  /* Reduz espaçamentos do grid */
+  .row.g-3{ --bs-gutter-x: 10px; --bs-gutter-y: 10px; }
+
+  /* Força os 2 gráficos lado a lado na impressão (A4 costuma cair para 1 coluna) */
+  #chartsRow{
+    display:flex !important;
+    gap: 10px !important;
+    flex-wrap: nowrap !important;
+  }
+  #chartsRow > .col-12{
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+  }
+
+  /* Gráficos menores e “quadrados” */
+  #chartsRow canvas{
+    width: 100% !important;
+    height: 230px !important;   /* ajuste fino: 210–250 conforme seu conteúdo */
+    max-height: 230px !important;
+  }
+
+  /* Evita quebra esquisita em textos longos */
+  pre{
+    white-space: pre-wrap !important;
+    font-size: 10px !important;
+    margin: 0 !important;
+  }
+
+  /* Remove links sublinhados na impressão */
+  a{ text-decoration:none !important; color:#000 !important; }
+}
