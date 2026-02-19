@@ -99,30 +99,41 @@ a:hover{ color: var(--navy); }
 /* =======================
    PRINT (A4 / 1 página)
    ======================= */
-
 @page{
   size: A4 portrait;
   margin: 10mm;
 }
 
 @media print{
+  /* esconde navegação/botões */
   #appNav{ display:none !important; }
   .no-print{ display:none !important; }
 
   html, body{ background:#fff !important; }
   .container{ max-width:none !important; padding:0 !important; }
 
-  body{ font-size: 11px !important; line-height: 1.2 !important; }
-  h1, .h1, h2, .h2, h3, .h3, h4, .h4{ margin:0 0 6px 0 !important; }
-  .small, .small-muted, .text-muted{ font-size: 10px !important; }
+  /* fonte maior (mais legível) */
+  body{ font-size: 12px !important; line-height: 1.25 !important; }
+  .small, .small-muted, .text-muted{ font-size: 11px !important; }
 
-  .card{ box-shadow:none !important; border:1px solid #ddd !important; break-inside: avoid; page-break-inside: avoid; }
-  .card-header{ padding: 6px 10px !important; }
-  .card-body{ padding: 8px 10px !important; }
+  /* cards compactos */
+  .card{
+    box-shadow:none !important;
+    border:1px solid #ddd !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .card-header{ padding: 7px 10px !important; }
+  .card-body{ padding: 9px 10px !important; }
 
-  .row.g-3{ --bs-gutter-x: 10px; --bs-gutter-y: 10px; }
+  /* força conteúdo colapsado (Bootstrap) a aparecer na impressão */
+  .collapse{
+    display:block !important;
+    height:auto !important;
+    visibility: visible !important;
+  }
 
-  /* ===== Gráficos em 2 colunas e menores ===== */
+  /* gráficos em 2 colunas e menores */
   #chartsRow{
     display:flex !important;
     gap: 10px !important;
@@ -134,41 +145,29 @@ a:hover{ color: var(--navy); }
   }
   #chartsRow canvas{
     width: 100% !important;
-    height: 210px !important;     /* menor para sobrar espaço para textos */
-    max-height: 210px !important;
+    height: 180px !important;     /* menor: deixa espaço para os textos */
+    max-height: 180px !important;
   }
 
-  /* ===== Resumo automático + Relatório escrito =====
-     Estratégia: reduzir fonte e limitar altura para caber em 1 página.
-     Se o texto for longo demais, será cortado na impressão. */
-  pre,
-  .report-text,
-  .written-report,
-  .auto-summary{
-    font-size: 10px !important;
-    line-height: 1.15 !important;
-    margin: 0 !important;
+  /* resumo e relatório: legíveis e controlados */
+  pre, textarea{
+    font-size: 11px !important;
+    line-height: 1.2 !important;
     white-space: pre-wrap !important;
+    margin: 0 !important;
   }
 
-  /* Caso seu HTML use <pre id="autoSummary"> e <pre id="writtenReport"> (ou similar),
-     estas regras pegam por id (não quebra nada se não existir). */
+  /* tenta manter em 1 página: limita altura dos blocos de texto */
   #autoSummary, #auto_summary, #ev_preview{
-    max-height: 90mm !important;
+    max-height: 55mm !important;
+    overflow: hidden !important;
+  }
+  #writtenReport, #written_report{
+    max-height: 45mm !important;
     overflow: hidden !important;
   }
 
-  #writtenReport, #written_report, #ev_written{
-    max-height: 60mm !important;
-    overflow: hidden !important;
-  }
-
-  /* Se o teu relatório escrito está dentro de um <div> ou <p>, use essa classe (opcional). */
-  .written-report{
-    max-height: 60mm !important;
-    overflow: hidden !important;
-  }
-
-  /* Evita sublinhado e URL expandida */
+  /* links sem sublinhado */
   a{ text-decoration:none !important; color:#000 !important; }
 }
+
