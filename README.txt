@@ -1,4 +1,12 @@
-Front-end (GitHub Pages)
+Plataforma Web Para Perfis.
+Podemos suar essa plataforma pra acompanhar pessoas, 
+e criar um a estrategia atraves dos graficos em como
+podemos ser uteis, como lideres, na formacao e desenvolvimento
+da pessoa avaliada. 
+
+Eh necessario: 
+Google Planilhas e Gogle App Script como banco de dados.
+oos arquivos desse projeto (html, js e css.)
 
 Arquivos:
 - login.html
