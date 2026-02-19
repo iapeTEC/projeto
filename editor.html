@@ -143,7 +143,7 @@
           </div>
 
           <div class="small text-muted mt-2">
-            Isso chama o endpoint <code>createUser</code> do Apps Script.
+            Chama o endpoint <code>createUser</code> do Apps Script.
           </div>
         </div>
       </div>
@@ -300,7 +300,6 @@
     cache.types = t.scholarship_types || [];
     cache.comps = c.competencies || [];
 
-    // selects
     fillSelect(el("st_sector"), cache.sectors, "sector_id", "name", "—");
     fillSelect(el("qs_sector"), cache.sectors, "sector_id", "name", "—");
     fillSelect(el("st_type"), cache.types, "type_id", "name", "—");
@@ -308,7 +307,6 @@
     fillSelect(el("qs_student"), cache.students, "student_id", "name", "—");
     fillSelect(el("ev_student"), cache.students, "student_id", "name", "—");
 
-    // tenta pré-selecionar aluno por URL
     if(urlStudentId){
       el("st_id").value = urlStudentId;
       el("qs_student").value = urlStudentId;
@@ -318,13 +316,6 @@
     renderScores();
   }
 
-  // Re-render das competências ao trocar o aluno da avaliação
-  el("ev_student").addEventListener("change", ()=>{
-    renderScores();
-    el("ev_preview").textContent = "—";
-  });
-
-  // Carrega aluno da URL (para editar mais fácil)
   el("btnLoadFromUrl").addEventListener("click", async ()=>{
     const sid = el("st_id").value.trim();
     if(!sid){ window.UI.toast("Informe um student_id.", "err"); return; }
@@ -346,7 +337,6 @@
     }
   });
 
-  // Salvar aluno (upsertStudent)
   el("studentForm").addEventListener("submit", async (ev)=>{
     ev.preventDefault();
     const sectorId = el("st_sector").value;
@@ -382,7 +372,6 @@
     }
   });
 
-  // Troca rápida de setor
   el("btnQuickSector").addEventListener("click", async ()=>{
     const sid = el("qs_student").value;
     const secId = el("qs_sector").value;
@@ -397,7 +386,12 @@
     }
   });
 
-  // Salvar avaliação
+  // Re-render das competências ao trocar o aluno da avaliação
+  el("ev_student").addEventListener("change", ()=>{
+    renderScores();
+    el("ev_preview").textContent = "—";
+  });
+
   el("btnSaveEval").addEventListener("click", async ()=>{
     const sid = el("ev_student").value;
     if(!sid){ window.UI.toast("Selecione um aluno.", "err"); return; }
@@ -425,7 +419,6 @@
     }
   });
 
-  // Cadastros rápidos
   el("btnAddSector").addEventListener("click", async ()=>{
     const name = el("new_sector_name").value.trim();
     if(!name) return window.UI.toast("Informe o nome do setor.", "err");
@@ -463,7 +456,7 @@
   el("btnCreateViewer").addEventListener("click", async ()=>{
     const login = el("vw_login").value.trim();
     const password = el("vw_password").value;
-    const role = el("vw_role").value || "VIEWER";
+    const role = (el("vw_role").value || "VIEWER").toUpperCase();
     if(!login || !password){
       window.UI.toast("Informe login e senha.", "err");
       return;
@@ -490,9 +483,6 @@
 })();
 </script>
 
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js
-"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
