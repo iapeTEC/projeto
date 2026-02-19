@@ -105,14 +105,13 @@ a:hover{ color: var(--navy); }
 }
 
 @media print{
-  /* esconde navegação/botões */
   #appNav{ display:none !important; }
   .no-print{ display:none !important; }
 
   html, body{ background:#fff !important; }
   .container{ max-width:none !important; padding:0 !important; }
 
-  /* fonte maior (mais legível) */
+  /* fonte legível */
   body{ font-size: 12px !important; line-height: 1.25 !important; }
   .small, .small-muted, .text-muted{ font-size: 11px !important; }
 
@@ -126,48 +125,49 @@ a:hover{ color: var(--navy); }
   .card-header{ padding: 7px 10px !important; }
   .card-body{ padding: 9px 10px !important; }
 
-  /* força conteúdo colapsado (Bootstrap) a aparecer na impressão */
-  .collapse{
-    display:block !important;
-    height:auto !important;
-    visibility: visible !important;
+  /* ===== IMPORTANTE: não force o #chartsRow inteiro como flex =====
+     Só ajusta os DOIS primeiros blocos (gráficos) para 2 colunas na impressão. */
+  #chartsRow{
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    column-gap: 10px !important;
+    row-gap: 10px !important;
   }
 
-  /* gráficos em 2 colunas e menores */
-  #chartsRow{
-    display:flex !important;
-    gap: 10px !important;
-    flex-wrap: nowrap !important;
+  /* gráficos = itens 1 e 2 (duas colunas) */
+  #chartsRow > :nth-child(1),
+  #chartsRow > :nth-child(2){
+    grid-column: auto !important;
   }
-  #chartsRow > .col-12{
-    flex: 0 0 50% !important;
-    max-width: 50% !important;
+
+  /* resumo e relatório = largura total */
+  #chartsRow > :nth-child(3),
+  #chartsRow > :nth-child(4){
+    grid-column: 1 / -1 !important;
   }
+
+  /* tamanhos de gráfico para caber com textos */
   #chartsRow canvas{
     width: 100% !important;
-    height: 180px !important;     /* menor: deixa espaço para os textos */
+    height: 180px !important;
     max-height: 180px !important;
   }
 
-  /* resumo e relatório: legíveis e controlados */
-  pre, textarea{
+  /* resumo/relatório legíveis e sem “estourar” */
+  #autoSummary{
     font-size: 11px !important;
     line-height: 1.2 !important;
-    white-space: pre-wrap !important;
     margin: 0 !important;
-  }
-
-  /* tenta manter em 1 página: limita altura dos blocos de texto */
-  #autoSummary, #auto_summary, #ev_preview{
-    max-height: 55mm !important;
-    overflow: hidden !important;
-  }
-  #writtenReport, #written_report{
     max-height: 45mm !important;
     overflow: hidden !important;
   }
 
-  /* links sem sublinhado */
+  #writtenReport{
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    max-height: 55mm !important;
+    overflow: hidden !important;
+  }
+
   a{ text-decoration:none !important; color:#000 !important; }
 }
-
