@@ -243,7 +243,8 @@
       el("writtenReport").textContent = latest.written_report || "—";
 
       const scoresById = safeParseJson(latest.scores_json);
-      const compList = (comps.competencies || []).filter(c=>c.active==="TRUE");
+      const compList = (comps.competencies || []);
+
       renderBar(compList, scoresById);
     } else {
       el("lastEval").textContent = "Sem avaliações";
