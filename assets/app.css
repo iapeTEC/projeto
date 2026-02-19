@@ -96,9 +96,9 @@ a:hover{ color: var(--navy); }
   a{ text-decoration:none; color:#000; }
 }
 
-/* =========================
+/* =======================
    PRINT (A4 / 1 página)
-   ========================= */
+   ======================= */
 
 @page{
   size: A4 portrait;
