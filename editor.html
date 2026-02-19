@@ -117,6 +117,37 @@
         </div>
       </div>
 
+      <div class="card mt-3">
+        <div class="card-header"><strong>Criar usuário (VIEWER)</strong></div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label">Login</label>
+              <input class="form-control" id="vw_login" placeholder="diretor1" autocomplete="username">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Senha</label>
+              <input class="form-control" id="vw_password" type="password" placeholder="••••••••" autocomplete="new-password">
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label">Role</label>
+              <select class="form-select" id="vw_role">
+                <option value="VIEWER" selected>VIEWER</option>
+              </select>
+              <div class="form-text">Diretores: VIEWER.</div>
+            </div>
+          </div>
+
+          <div class="mt-3 d-grid">
+            <button class="btn btn-outline-primary" id="btnCreateViewer">Criar</button>
+          </div>
+
+          <div class="small text-muted mt-2">
+            Isso chama o endpoint <code>createUser</code> do Apps Script.
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <div class="col-12 col-lg-6">
@@ -230,7 +261,12 @@
 
   function renderScores(){
     const box = el("scoresBox");
+    const sid = el("ev_student").value;
     box.innerHTML = "";
+    if(!sid){
+      box.innerHTML = `<div class="small text-muted">Selecione um aluno para lançar notas.</div>`;
+      return;
+    }
     cache.comps.forEach(c=>{
       const id = "score_" + c.comp_id;
       const row = document.createElement("div");
@@ -281,6 +317,12 @@
 
     renderScores();
   }
+
+  // Re-render das competências ao trocar o aluno da avaliação
+  el("ev_student").addEventListener("change", ()=>{
+    renderScores();
+    el("ev_preview").textContent = "—";
+  });
 
   // Carrega aluno da URL (para editar mais fácil)
   el("btnLoadFromUrl").addEventListener("click", async ()=>{
@@ -417,6 +459,26 @@
     }catch(e){ window.UI.toast(e.message || String(e), "err"); }
   });
 
+  // Criar usuário VIEWER (diretores)
+  el("btnCreateViewer").addEventListener("click", async ()=>{
+    const login = el("vw_login").value.trim();
+    const password = el("vw_password").value;
+    const role = el("vw_role").value || "VIEWER";
+    if(!login || !password){
+      window.UI.toast("Informe login e senha.", "err");
+      return;
+    }
+    try{
+      await window.Api.apiPost("createUser", { user: { login, password, role } });
+      el("vw_login").value = "";
+      el("vw_password").value = "";
+      el("vw_role").value = "VIEWER";
+      window.UI.toast("Usuário criado.", "ok");
+    }catch(e){
+      window.UI.toast(e.message || String(e), "err");
+    }
+  });
+
   el("btnRefresh").addEventListener("click", async ()=>{
     try{
       await refreshAll();
@@ -429,7 +491,8 @@
 </script>
 
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js
+"></script>
 
 </body>
 </html>
