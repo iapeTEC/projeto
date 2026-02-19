@@ -134,6 +134,15 @@
       a.textContent = "Editar / Avaliar";
       actions.appendChild(a);
     }
+
+    // Relatório para sponsor (linguagem neutra) — disponível para VIEWER e EDITOR
+    if(user.role === "VIEWER" || user.role === "EDITOR"){
+      const a = document.createElement("a");
+      a.className = "btn btn-sm btn-outline-dark";
+      a.href = "sponsor.html?student_id=" + encodeURIComponent(st.student_id);
+      a.textContent = "Relatório (Sponsor)";
+      actions.appendChild(a);
+    }
   }
 
   function renderBar(compList, scoresById){
