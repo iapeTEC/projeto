@@ -1,3 +1,14 @@
+
+
+  function ensureScoresHint_(){
+    const box = el("scoresBox");
+    if(!box) return;
+    const hasInputs = box.querySelectorAll("input,select,button").length > 0;
+    if(!hasInputs){
+      box.innerHTML = '<div class="alert alert-warning mb-0">Nenhuma competência cadastrada ou carregada. Crie em <strong>Cadastros rápidos → Competências</strong> e depois clique em <strong>Atualizar listas</strong>.</div>';
+    }
+  }
+
 <!doctype html>
 <html lang="pt-BR">
 <head>
@@ -335,6 +346,7 @@
       if(!el("st_id").value.trim()) el("st_id").value = res.student_id;
       window.UI.toast("Aluno salvo.", "ok");
       await refreshAll();
+  ensureScoresHint_();
     }catch(e){
       window.UI.toast(e.message || String(e), "err");
     }
@@ -417,6 +429,28 @@
     }catch(e){ window.UI.toast(e.message || String(e), "err"); }
   });
 
+
+  // Criar usuário (VIEWER/EDITOR)
+  const __btnCreateUser = el("btnCreateUser");
+  if(__btnCreateUser) __btnCreateUser.addEventListener("click", async ()=>{
+    const login = el("u_login").value.trim();
+    const password = el("u_pass").value;
+    const role = el("u_role").value;
+
+    if(!login || !password){
+      return window.UI.toast("Informe login e senha.", "err");
+    }
+
+    try{
+      await window.Api.apiPost("createUser", { user: { login, password, role } });
+      el("u_login").value = "";
+      el("u_pass").value = "";
+      window.UI.toast("Usuário criado.", "ok");
+    }catch(e){
+      window.UI.toast(e.message || String(e), "err");
+    }
+  });
+
   el("btnRefresh").addEventListener("click", async ()=>{
     try{
       await refreshAll();
@@ -433,3 +467,32 @@
 
 </body>
 </html>
+
+      <div class="card mt-3">
+        <div class="card-header"><strong>Usuários (criar / ativar)</strong></div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-12 col-md-4">
+              <label class="form-label">Login</label>
+              <input class="form-control" id="u_login" placeholder="ex.: diretor1">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label">Senha</label>
+              <input class="form-control" id="u_pass" type="password" placeholder="senha">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label">Perfil</label>
+              <select class="form-select" id="u_role">
+                <option value="VIEWER">VIEWER (diretor)</option>
+                <option value="EDITOR">EDITOR</option>
+              </select>
+            </div>
+          </div>
+          <div class="d-grid gap-2 mt-3">
+            <button class="btn btn-outline-primary" id="btnCreateUser">Criar usuário</button>
+          </div>
+          <div class="small text-muted mt-2">
+            Observação: este botão chama o endpoint <code>createUser</code>. Use senhas fortes.
+          </div>
+        </div>
+      </div>
