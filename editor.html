@@ -243,6 +243,9 @@
     comps: []
   };
 
+  // fonte única para o render de sliders (não depende de cache.comps)
+  let compsForEval = [];
+
   function fillSelect(sel, items, valueKey, labelKey, emptyLabel){
     sel.innerHTML = "";
     if(emptyLabel){
@@ -263,18 +266,29 @@
     const box = el("scoresBox");
     const sid = el("ev_student").value;
     box.innerHTML = "";
+
     if(!sid){
       box.innerHTML = `<div class="small text-muted">Selecione um aluno para lançar notas.</div>`;
       return;
     }
-    cache.comps.forEach(c=>{
-      const id = "score_" + c.comp_id;
+
+    if(!compsForEval || !compsForEval.length){
+      box.innerHTML = `<div class="small text-muted">Nenhuma competência encontrada.</div>`;
+      return;
+    }
+
+    compsForEval.forEach(c=>{
+      const compId = String(c.comp_id || "");
+      const compName = String(c.name || "");
+      if(!compId) return;
+
+      const id = "score_" + compId;
       const row = document.createElement("div");
       row.className = "mb-2";
 
       row.innerHTML = `
         <label class="form-label d-flex justify-content-between">
-          <span>${window.Api.esc(c.name)}</span>
+          <span>${compName}</span>
           <span class="small text-muted" id="${id}_v">0</span>
         </label>
         <input type="range" class="form-range" min="0" max="10" step="1" value="0" id="${id}">
@@ -283,8 +297,14 @@
 
       const slider = document.getElementById(id);
       const v = document.getElementById(id + "_v");
-      slider.addEventListener("input", ()=>{ v.textContent = slider.value; });
+      if(slider && v){
+        slider.addEventListener("input", ()=>{ v.textContent = slider.value; });
+      }
     });
+
+    if(!box.children.length){
+      box.innerHTML = `<div class="small text-muted">Competências carregadas, mas nada foi renderizado (verifique comp_id).</div>`;
+    }
   }
 
   async function refreshAll(){
@@ -292,13 +312,17 @@
       window.Api.apiPost("listStudents", { filters: { status:"ACTIVE" } }),
       window.Api.apiPost("listSectors", {}),
       window.Api.apiPost("listScholarshipTypes", {}),
-      window.Api.apiPost("listCompetencies", { active_only:"TRUE" })
+      // IMPORTANT: sem active_only para não depender do campo active estar perfeito
+      window.Api.apiPost("listCompetencies", {})
     ]);
 
     cache.students = s.students || [];
     cache.sectors = sec.sectors || [];
     cache.types = t.scholarship_types || [];
     cache.comps = c.competencies || [];
+
+    // base para render de sliders
+    compsForEval = (c.competencies || []);
 
     fillSelect(el("st_sector"), cache.sectors, "sector_id", "name", "—");
     fillSelect(el("qs_sector"), cache.sectors, "sector_id", "name", "—");
@@ -397,9 +421,10 @@
     if(!sid){ window.UI.toast("Selecione um aluno.", "err"); return; }
 
     const scores = {};
-    cache.comps.forEach(c=>{
-      const v = document.getElementById("score_" + c.comp_id).value;
-      scores[c.comp_id] = Number(v);
+    compsForEval.forEach(c=>{
+      const input = document.getElementById("score_" + c.comp_id);
+      if(!input) return;
+      scores[c.comp_id] = Number(input.value);
     });
 
     const evaluation = {
