@@ -171,3 +171,105 @@ a:hover{ color: var(--navy); }
 
   a{ text-decoration:none !important; color:#000 !important; }
 }
+
+/* ===== Editor: estilo iPhone-like (leve) ===== */
+
+.page-soft{
+  background: #f3f5f8;
+}
+
+/* Card mais “container” */
+.ios-card{
+  border: 1px solid rgba(10, 30, 60, 0.10);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #f5f6f8;
+  box-shadow: 0 8px 22px rgba(10, 20, 35, 0.08);
+}
+
+/* Header navy com texto branco centralizado */
+.ios-card-header{
+  background: var(--navy, #0b1f3a);
+  color: #fff;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+
+/* Body do card com cinza bem leve */
+.ios-card-body{
+  background: #f5f6f8;
+}
+
+/* Campos brancos (para “destacar” do container) */
+.ios-card .form-control,
+.ios-card .form-select,
+.ios-card textarea{
+  background: #ffffff;
+  border: 1px solid rgba(10, 30, 60, 0.16);
+  border-radius: 12px;
+}
+
+/* Slider com mais “cara iOS” */
+.ios-card .form-range{
+  margin-top: 6px;
+}
+
+/* Card clicável (abre modal) */
+.clickable-card{
+  cursor: pointer;
+}
+
+/* Evita que clique em campos pareça clicar no card */
+.clickable-card input,
+.clickable-card select,
+.clickable-card textarea,
+.clickable-card button{
+  cursor: auto;
+}
+
+/* Modal com cara iPhone */
+.ios-modal{
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(10, 30, 60, 0.10);
+  box-shadow: 0 18px 50px rgba(10, 20, 35, 0.18);
+}
+
+.ios-modal-header{
+  background: var(--navy, #0b1f3a);
+  color: #fff;
+  text-align: center;
+  justify-content: center;
+  position: relative;
+}
+
+.ios-modal-header .btn-close{
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Backdrop com blur (pode ser pesado em dispositivos antigos) */
+.modal-backdrop.show{
+  opacity: 0.45;
+}
+
+/* Blur real no fundo (Safari/iOS/Chrome modernos) */
+@supports ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))){
+  .modal-backdrop.show{
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+}
+
+/* Respeita usuários com preferência por menos transparência (fallback) */
+@media (prefers-reduced-transparency: reduce){
+  .modal-backdrop.show{
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    opacity: 0.55;
+  }
+}
