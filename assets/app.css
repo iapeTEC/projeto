@@ -420,3 +420,13 @@ body.page-soft[data-page="editor"] .tile-btn:focus{
     backdrop-filter: blur(8px);
   }
 }
+
+/* Remove o header do card quando o card estiver dentro do modal (evita título duplicado) */
+#cardModal .card > .card-header{
+  display: none !important;
+}
+
+/* opcional: dá um respiro no topo do body do card dentro do modal */
+#cardModal .card > .card-body{
+  padding-top: 14px;
+}
