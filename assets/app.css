@@ -273,3 +273,52 @@ a:hover{ color: var(--navy); }
     opacity: 0.55;
   }
 }
+
+/* ===== Editor: tema iPhone SEM depender de classes extras ===== */
+body.page-soft{
+  background: #f3f5f8 !important;
+}
+
+/* cards com “container” levemente cinza */
+body.page-soft .card{
+  border: 1px solid rgba(10, 30, 60, 0.10) !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+  background: #f5f6f8 !important;
+  box-shadow: 0 8px 22px rgba(10, 20, 35, 0.08) !important;
+}
+
+/* header navy com letras brancas (centrado) */
+body.page-soft .card > .card-header{
+  background: var(--navy, #0b1f3a) !important;
+  color: #fff !important;
+  text-align: center !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.2px !important;
+  border-bottom: 1px solid rgba(255,255,255,0.12) !important;
+}
+
+/* body do card levemente cinza */
+body.page-soft .card > .card-body{
+  background: #f5f6f8 !important;
+}
+
+/* inputs brancos (destacando do container) */
+body.page-soft .card .form-control,
+body.page-soft .card .form-select,
+body.page-soft .card textarea{
+  background: #fff !important;
+  border: 1px solid rgba(10, 30, 60, 0.16) !important;
+  border-radius: 12px !important;
+}
+
+/* deixa clique “de card” mais agradável */
+body.page-soft .clickable-card{
+  cursor: pointer;
+}
+body.page-soft .clickable-card input,
+body.page-soft .clickable-card select,
+body.page-soft .clickable-card textarea,
+body.page-soft .clickable-card button{
+  cursor: auto;
+}
