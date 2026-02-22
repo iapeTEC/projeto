@@ -56,17 +56,10 @@
           
 <input type="hidden" id="st_id" value="">
 
-<div class="mb-2">
-  <label class="form-label">Carregar aluno para editar</label>
-  <input class="form-control" id="st_load_q" placeholder="Digite para filtrar (ex.: Alice)">
-  <div class="mt-2 student-pick">
-    <select class="form-select" id="st_load_sel" size="6" aria-label="Lista de alunos filtrada"></select>
-  </div>
-  <div class="mt-2 d-grid">
-    <button class="btn btn-outline-primary" type="button" id="btnLoadSelectedStudent">Carregar aluno selecionado</button>
-  </div>
-  <div class="form-text">Para criar novo aluno: deixe sem carregar e preencha os campos abaixo.</div>
+<div class="mb-2 d-grid">
+  <button class="btn btn-outline-primary" type="button" id="btnOpenStudentPicker">Carregar aluno para editar</button>
 </div>
+<div class="form-text mb-2">Para criar novo aluno: não carregue ninguém e preencha os campos abaixo.</div>
 
 
           <div class="mb-2">
@@ -84,8 +77,9 @@
               </select>
             </div>
             <div class="col-6">
-              <label class="form-label">Nascimento (yyyy-mm-dd)</label>
-              <input type="hidden" class="form-control" id="st_birth"><div class="date3" data-target="st_birth">  <input class="form-control date3-dd" inputmode="numeric" maxlength="2" placeholder="DD" aria-label="Dia">  <span class="date3-sep">/</span>  <input class="form-control date3-mm" inputmode="numeric" maxlength="2" placeholder="MM" aria-label="Mês">  <span class="date3-sep">/</span>  <input class="form-control date3-yy" inputmode="numeric" maxlength="4" placeholder="AAAA" aria-label="Ano"></div>
+              <label class="form-label">Nascimento</label>
+              <input class="form-control" id="st_birth_ui" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10">
+              <input type="hidden" id="st_birth">
             </div>
           </div>
 
@@ -127,8 +121,7 @@
 
           <div class="mt-3 d-grid gap-2">
             <button class="btn btn-navy" type="submit">Salvar aluno</button>
-            <button class="btn btn-outline-secondary" type="button" id="btnLoadFromUrl">Carregar aluno da URL (opcional)</button>
-          </div>
+</div>
 
           <div class="small text-muted mt-2">
             Dica: abra um aluno em students.html e clique em “Editar / Avaliar” no perfil para trazer o student_id na URL.
@@ -194,7 +187,8 @@
         <div class="row g-2">
           <div class="col-6">
             <label class="form-label">Data</label>
-            <input type="hidden" class="form-control" id="ev_date"><div class="date3" data-target="ev_date">  <input class="form-control date3-dd" inputmode="numeric" maxlength="2" placeholder="DD" aria-label="Dia">  <span class="date3-sep">/</span>  <input class="form-control date3-mm" inputmode="numeric" maxlength="2" placeholder="MM" aria-label="Mês">  <span class="date3-sep">/</span>  <input class="form-control date3-yy" inputmode="numeric" maxlength="4" placeholder="AAAA" aria-label="Ano"></div>
+              <input class="form-control" id="ev_date_ui" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10">
+              <input type="hidden" id="ev_date">
           </div>
           <div class="col-6">
             <label class="form-label">Período (tag)</label>
@@ -254,6 +248,33 @@
 </div><!-- /container -->
 
 
+
+<!-- Modal: selecionar aluno para editar -->
+<div class="modal fade" id="studentPickerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content ios-modal">
+      <div class="modal-header ios-modal-header">
+        <h5 class="modal-title">Carregar aluno</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Buscar</label>
+        <input class="form-control" id="st_pick_q" placeholder="Digite para filtrar (ex.: Alice)">
+
+        <div class="mt-2">
+          <select class="form-select" id="st_pick_sel" size="8" aria-label="Lista de alunos"></select>
+        </div>
+
+        <div class="mt-3 d-grid gap-2">
+          <button class="btn btn-navy" type="button" id="btnPickLoad">Carregar aluno selecionado</button>
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- Modal único -->
 <div class="modal fade" id="cardModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -282,10 +303,69 @@
     const dd = String(d.getDate()).padStart(2,"0");
     return `${y}-${m}-${dd}`;
   }
-  setDate3FromIso_(el("ev_date"), todayISO());
+  
+
+  function onlyDigits_(s){
+    return String(s || "").replace(/\D+/g, "");
+  }
+
+  function formatBRDate_(digits){
+    const d = digits.substring(0, 2);
+    const m = digits.substring(2, 4);
+    const y = digits.substring(4, 8);
+
+    let out = d;
+    if (digits.length >= 3) out += "/" + m;
+    if (digits.length >= 5) out += "/" + y;
+    return out;
+  }
+
+  function brToIso_(br){
+    const m = String(br || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if(!m) return "";
+    return `${m[3]}-${m[2]}-${m[1]}`;
+  }
+
+  function isoToBr_(iso){
+    const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(!m) return "";
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  }
+
+  function bindDateMask_(uiId, hiddenId){
+    const ui = document.getElementById(uiId);
+    const hidden = document.getElementById(hiddenId);
+    if(!ui || !hidden) return;
+
+    if(hidden.value) ui.value = isoToBr_(hidden.value);
+
+    ui.addEventListener("input", ()=>{
+      const digits = onlyDigits_(ui.value).substring(0, 8);
+      ui.value = formatBRDate_(digits);
+
+      const iso = brToIso_(ui.value);
+      hidden.value = iso || "";
+    });
+
+    ui.addEventListener("blur", ()=>{
+      const iso = brToIso_(ui.value);
+      hidden.value = iso || "";
+    });
+  }
+
+  function setTodayOnEval_(){
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2,"0");
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const yyyy = String(d.getFullYear());
+    const ui = document.getElementById("ev_date_ui");
+    const hidden = document.getElementById("ev_date");
+    if(ui) ui.value = `${dd}/${mm}/${yyyy}`;
+    if(hidden) hidden.value = `${yyyy}-${mm}-${dd}`;
+  }
+el("ev_date").value = todayISO();
 
   let cache = { students: [], sectors: [], types: [], comps: [] };
-  let currentStudentId = "";
   let compsForEval = [];
 
   function fillSelect(sel, items, valueKey, labelKey, emptyLabel){
@@ -303,124 +383,6 @@
       sel.appendChild(opt);
     });
   }
-
-  function normalize_(s){
-    return String(s||"").toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-      .replace(/\s+/g," ").trim();
-  }
-
-  function applyStudentFilter_(){
-    const q = normalize_(el("st_load_q").value);
-    const items = (cache.students || []);
-    const filtered = q ? items.filter(st => normalize_(st.name).includes(q)) : items.slice(0);
-
-    filtered.sort((a,b)=> String(a.name||"").localeCompare(String(b.name||"")));
-    const sel = el("st_load_sel");
-    sel.innerHTML = "";
-    filtered.forEach(st=>{
-      const opt = document.createElement("option");
-      opt.value = st.student_id;
-      opt.textContent = st.name;
-      sel.appendChild(opt);
-    });
-  }
-
-  async function loadStudentById_(sid){
-    if(!sid) return;
-    try{
-      const rep = await window.Api.apiPost("getStudentReport", { student_id: sid });
-      const st = rep.student;
-
-      currentStudentId = st.student_id || sid;
-      el("st_id").value = currentStudentId;
-
-      el("st_name").value = st.name || "";
-      el("st_sex").value = st.sex || "";
-      setDate3FromIso_(el("st_birth"), st.birth_date || "");
-      el("st_phone").value = st.phone_display || st.phone_e164 || "";
-      el("st_photo").value = st.photo_url || "";
-      el("st_sector").value = st.sector_current_id || "";
-      el("st_type").value = st.scholarship_type_id || "";
-      el("st_work").value = st.workload_minutes || "";
-      el("st_status").value = st.status || "ACTIVE";
-
-      window.UI.toast("Aluno carregado para edição.", "ok");
-    }catch(e){
-      window.UI.toast(e.message || String(e), "err");
-    }
-  }
-
-  function setDate3FromIso_(hiddenInput, iso){
-    const wrap = hiddenInput?.nextElementSibling;
-    if(!wrap || !wrap.classList?.contains("date3")) return;
-    const dd = wrap.querySelector(".date3-dd");
-    const mm = wrap.querySelector(".date3-mm");
-    const yy = wrap.querySelector(".date3-yy");
-    hiddenInput.value = iso || "";
-    if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)){
-      dd.value = ""; mm.value = ""; yy.value = "";
-      return;
-    }
-    const [y,m,d] = iso.split("-");
-    dd.value = d; mm.value = m; yy.value = y;
-  }
-
-  function syncDate3ToIso_(wrap){
-    const targetId = wrap.getAttribute("data-target");
-    const hidden = document.getElementById(targetId);
-    const ddRaw = wrap.querySelector(".date3-dd").value;
-    const mmRaw = wrap.querySelector(".date3-mm").value;
-    const yy = wrap.querySelector(".date3-yy").value;
-
-    if(ddRaw.length===2 && mmRaw.length===2 && yy.length===4){
-      const dd = ddRaw.padStart(2,"0");
-      const mm = mmRaw.padStart(2,"0");
-      hidden.value = `${yy}-${mm}-${dd}`;
-    }else{
-      hidden.value = "";
-    }
-  }
-
-  function initDate3_(){
-    document.querySelectorAll(".date3").forEach(wrap=>{
-      const dd = wrap.querySelector(".date3-dd");
-      const mm = wrap.querySelector(".date3-mm");
-      const yy = wrap.querySelector(".date3-yy");
-
-      function onlyDigits(elm){
-        elm.value = elm.value.replace(/\D+/g,"");
-      }
-
-      function onInput(e){
-        const t = e.target;
-        onlyDigits(t);
-
-        if(t === dd && t.value.length >= 2) mm.focus();
-        if(t === mm && t.value.length >= 2) yy.focus();
-        if(t === yy && t.value.length >= 4) yy.blur();
-
-        syncDate3ToIso_(wrap);
-      }
-
-      function onKeydown(e){
-        const t = e.target;
-        if(e.key === "Backspace" && t.selectionStart === 0 && t.selectionEnd === 0){
-          if(t === mm) dd.focus();
-          if(t === yy) mm.focus();
-        }
-      }
-
-      dd.addEventListener("input", onInput);
-      mm.addEventListener("input", onInput);
-      yy.addEventListener("input", onInput);
-
-      dd.addEventListener("keydown", onKeydown);
-      mm.addEventListener("keydown", onKeydown);
-      yy.addEventListener("keydown", onKeydown);
-    });
-  }
-
 
   function renderScores(){
     const box = el("scoresBox");
@@ -482,8 +444,6 @@
     fillSelect(el("qs_student"), cache.students, "student_id", "name", "—");
     fillSelect(el("ev_student"), cache.students, "student_id", "name", "—");
 
-    applyStudentFilter_();
-
     if(urlStudentId){
       el("st_id").value = urlStudentId;
       el("qs_student").value = urlStudentId;
@@ -491,17 +451,8 @@
     }
 
     renderScores();
+    if (typeof renderPickList_ === "function") renderPickList_();
   }
-
-  // aluno da URL
-  el("btnLoadFromUrl").addEventListener("click", async ()=>{
-  const sid = (window.UI.getParam("student_id") || "").trim();
-  if(!sid){ window.UI.toast("Informe student_id na URL.", "err"); return; }
-  await loadStudentById_(sid);
-});
-
-
-
   // salvar aluno
   el("studentForm").addEventListener("submit", async (ev)=>{
     ev.preventDefault();
@@ -513,7 +464,7 @@
 
     const payload = {
       student: {
-        student_id: String(currentStudentId || "").trim(),
+        student_id: el("st_id").value.trim(),
         name: el("st_name").value.trim(),
         sex: el("st_sex").value,
         birth_date: el("st_birth").value.trim(),
@@ -530,11 +481,83 @@
 
     try{
       const res = await window.Api.apiPost("upsertStudent", payload);
-      if(!currentStudentId) currentStudentId = res.student_id;
-      el("st_id").value = currentStudentId;
+      if(!el("st_id").value.trim()) el("st_id").value = res.student_id;
       window.UI.toast("Aluno salvo.", "ok");
-      initDate3_();
-  await refreshAll();
+      await refreshAll();
+
+
+  // ===== Picker: carregar aluno para editar (busca + lista filtrável) =====
+  const pickModalEl = document.getElementById("studentPickerModal");
+  const pickModal = new bootstrap.Modal(pickModalEl, { backdrop:true, keyboard:true });
+
+  function norm_(s){
+    return String(s||"").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+      .replace(/\s+/g," ").trim();
+  }
+
+  function renderPickList_(){
+    const q = norm_(document.getElementById("st_pick_q").value);
+    const sel = document.getElementById("st_pick_sel");
+    sel.innerHTML = "";
+
+    const list = (cache.students || []);
+    const filtered = q ? list.filter(st => norm_(st.name).includes(q)) : list.slice(0);
+    filtered.sort((a,b)=> String(a.name||"").localeCompare(String(b.name||"")));
+
+    filtered.forEach(st=>{
+      const opt = document.createElement("option");
+      opt.value = st.student_id;
+      opt.textContent = st.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function loadStudentById_(sid){
+    if(!sid) return;
+
+    const rep = await window.Api.apiPost("getStudentReport", { student_id: sid });
+    const st = rep.student;
+
+    el("st_id").value = st.student_id || sid;
+
+    el("st_name").value = st.name || "";
+    el("st_sex").value = st.sex || "";
+    el("st_birth").value = st.birth_date || "";
+    const bUI = document.getElementById("st_birth_ui");
+    if(bUI) bUI.value = isoToBr_(st.birth_date || "");
+    el("st_phone").value = st.phone_display || st.phone_e164 || "";
+    el("st_photo").value = st.photo_url || "";
+    el("st_sector").value = st.sector_current_id || "";
+    el("st_type").value = st.scholarship_type_id || "";
+    el("st_work").value = st.workload_minutes || "";
+    el("st_status").value = st.status || "ACTIVE";
+
+    window.UI.toast("Aluno carregado para edição.", "ok");
+  }
+
+  el("btnOpenStudentPicker").addEventListener("click", ()=>{
+    document.getElementById("st_pick_q").value = "";
+    renderPickList_();
+    pickModal.show();
+  });
+
+  document.getElementById("st_pick_q").addEventListener("input", renderPickList_);
+
+  document.getElementById("btnPickLoad").addEventListener("click", async ()=>{
+    const sid = document.getElementById("st_pick_sel").value;
+    if(!sid){ window.UI.toast("Selecione um aluno.", "err"); return; }
+    await loadStudentById_(sid);
+    pickModal.hide();
+  });
+
+  document.getElementById("st_pick_sel").addEventListener("dblclick", async ()=>{
+    const sid = document.getElementById("st_pick_sel").value;
+    if(!sid) return;
+    await loadStudentById_(sid);
+    pickModal.hide();
+  });
+
     }catch(e){
       window.UI.toast(e.message || String(e), "err");
     }
