@@ -430,3 +430,13 @@ body.page-soft[data-page="editor"] .tile-btn:focus{
 #cardModal .card > .card-body{
   padding-top: 14px;
 }
+
+/* ===== Editor: picker de aluno + data DD/MM/AAAA (campo único) ===== */
+#studentPickerModal select{
+  height: 260px;
+}
+
+#st_birth_ui, #ev_date_ui{
+  text-align: center;
+  letter-spacing: .6px;
+}
