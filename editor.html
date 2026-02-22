@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<title>Editor • Bolsistas</title>
+<title>Projeto</title>
 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -53,10 +53,21 @@
       <div class="card-header ios-card-header"><strong>Aluno (criar/atualizar)</strong></div>
       <div class="card-body ios-card-body">
         <form id="studentForm">
-          <div class="mb-2">
-            <label class="form-label">student_id (vazio para novo)</label>
-            <input class="form-control" id="st_id" placeholder="(deixe vazio para criar)">
-          </div>
+          
+<input type="hidden" id="st_id" value="">
+
+<div class="mb-2">
+  <label class="form-label">Carregar aluno para editar</label>
+  <input class="form-control" id="st_load_q" placeholder="Digite para filtrar (ex.: Alice)">
+  <div class="mt-2 student-pick">
+    <select class="form-select" id="st_load_sel" size="6" aria-label="Lista de alunos filtrada"></select>
+  </div>
+  <div class="mt-2 d-grid">
+    <button class="btn btn-outline-primary" type="button" id="btnLoadSelectedStudent">Carregar aluno selecionado</button>
+  </div>
+  <div class="form-text">Para criar novo aluno: deixe sem carregar e preencha os campos abaixo.</div>
+</div>
+
 
           <div class="mb-2">
             <label class="form-label">Nome</label>
@@ -74,7 +85,7 @@
             </div>
             <div class="col-6">
               <label class="form-label">Nascimento (yyyy-mm-dd)</label>
-              <input class="form-control" id="st_birth" placeholder="2008-05-12">
+              <input type="hidden" class="form-control" id="st_birth"><div class="date3" data-target="st_birth">  <input class="form-control date3-dd" inputmode="numeric" maxlength="2" placeholder="DD" aria-label="Dia">  <span class="date3-sep">/</span>  <input class="form-control date3-mm" inputmode="numeric" maxlength="2" placeholder="MM" aria-label="Mês">  <span class="date3-sep">/</span>  <input class="form-control date3-yy" inputmode="numeric" maxlength="4" placeholder="AAAA" aria-label="Ano"></div>
             </div>
           </div>
 
@@ -116,7 +127,7 @@
 
           <div class="mt-3 d-grid gap-2">
             <button class="btn btn-navy" type="submit">Salvar aluno</button>
-            <button class="btn btn-outline-secondary" type="button" id="btnLoadFromUrl">Carregar aluno da URL</button>
+            <button class="btn btn-outline-secondary" type="button" id="btnLoadFromUrl">Carregar aluno da URL (opcional)</button>
           </div>
 
           <div class="small text-muted mt-2">
@@ -183,7 +194,7 @@
         <div class="row g-2">
           <div class="col-6">
             <label class="form-label">Data</label>
-            <input class="form-control" id="ev_date" placeholder="yyyy-mm-dd">
+            <input type="hidden" class="form-control" id="ev_date"><div class="date3" data-target="ev_date">  <input class="form-control date3-dd" inputmode="numeric" maxlength="2" placeholder="DD" aria-label="Dia">  <span class="date3-sep">/</span>  <input class="form-control date3-mm" inputmode="numeric" maxlength="2" placeholder="MM" aria-label="Mês">  <span class="date3-sep">/</span>  <input class="form-control date3-yy" inputmode="numeric" maxlength="4" placeholder="AAAA" aria-label="Ano"></div>
           </div>
           <div class="col-6">
             <label class="form-label">Período (tag)</label>
@@ -271,9 +282,10 @@
     const dd = String(d.getDate()).padStart(2,"0");
     return `${y}-${m}-${dd}`;
   }
-  el("ev_date").value = todayISO();
+  setDate3FromIso_(el("ev_date"), todayISO());
 
   let cache = { students: [], sectors: [], types: [], comps: [] };
+  let currentStudentId = "";
   let compsForEval = [];
 
   function fillSelect(sel, items, valueKey, labelKey, emptyLabel){
@@ -291,6 +303,124 @@
       sel.appendChild(opt);
     });
   }
+
+  function normalize_(s){
+    return String(s||"").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+      .replace(/\s+/g," ").trim();
+  }
+
+  function applyStudentFilter_(){
+    const q = normalize_(el("st_load_q").value);
+    const items = (cache.students || []);
+    const filtered = q ? items.filter(st => normalize_(st.name).includes(q)) : items.slice(0);
+
+    filtered.sort((a,b)=> String(a.name||"").localeCompare(String(b.name||"")));
+    const sel = el("st_load_sel");
+    sel.innerHTML = "";
+    filtered.forEach(st=>{
+      const opt = document.createElement("option");
+      opt.value = st.student_id;
+      opt.textContent = st.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function loadStudentById_(sid){
+    if(!sid) return;
+    try{
+      const rep = await window.Api.apiPost("getStudentReport", { student_id: sid });
+      const st = rep.student;
+
+      currentStudentId = st.student_id || sid;
+      el("st_id").value = currentStudentId;
+
+      el("st_name").value = st.name || "";
+      el("st_sex").value = st.sex || "";
+      setDate3FromIso_(el("st_birth"), st.birth_date || "");
+      el("st_phone").value = st.phone_display || st.phone_e164 || "";
+      el("st_photo").value = st.photo_url || "";
+      el("st_sector").value = st.sector_current_id || "";
+      el("st_type").value = st.scholarship_type_id || "";
+      el("st_work").value = st.workload_minutes || "";
+      el("st_status").value = st.status || "ACTIVE";
+
+      window.UI.toast("Aluno carregado para edição.", "ok");
+    }catch(e){
+      window.UI.toast(e.message || String(e), "err");
+    }
+  }
+
+  function setDate3FromIso_(hiddenInput, iso){
+    const wrap = hiddenInput?.nextElementSibling;
+    if(!wrap || !wrap.classList?.contains("date3")) return;
+    const dd = wrap.querySelector(".date3-dd");
+    const mm = wrap.querySelector(".date3-mm");
+    const yy = wrap.querySelector(".date3-yy");
+    hiddenInput.value = iso || "";
+    if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)){
+      dd.value = ""; mm.value = ""; yy.value = "";
+      return;
+    }
+    const [y,m,d] = iso.split("-");
+    dd.value = d; mm.value = m; yy.value = y;
+  }
+
+  function syncDate3ToIso_(wrap){
+    const targetId = wrap.getAttribute("data-target");
+    const hidden = document.getElementById(targetId);
+    const ddRaw = wrap.querySelector(".date3-dd").value;
+    const mmRaw = wrap.querySelector(".date3-mm").value;
+    const yy = wrap.querySelector(".date3-yy").value;
+
+    if(ddRaw.length===2 && mmRaw.length===2 && yy.length===4){
+      const dd = ddRaw.padStart(2,"0");
+      const mm = mmRaw.padStart(2,"0");
+      hidden.value = `${yy}-${mm}-${dd}`;
+    }else{
+      hidden.value = "";
+    }
+  }
+
+  function initDate3_(){
+    document.querySelectorAll(".date3").forEach(wrap=>{
+      const dd = wrap.querySelector(".date3-dd");
+      const mm = wrap.querySelector(".date3-mm");
+      const yy = wrap.querySelector(".date3-yy");
+
+      function onlyDigits(elm){
+        elm.value = elm.value.replace(/\D+/g,"");
+      }
+
+      function onInput(e){
+        const t = e.target;
+        onlyDigits(t);
+
+        if(t === dd && t.value.length >= 2) mm.focus();
+        if(t === mm && t.value.length >= 2) yy.focus();
+        if(t === yy && t.value.length >= 4) yy.blur();
+
+        syncDate3ToIso_(wrap);
+      }
+
+      function onKeydown(e){
+        const t = e.target;
+        if(e.key === "Backspace" && t.selectionStart === 0 && t.selectionEnd === 0){
+          if(t === mm) dd.focus();
+          if(t === yy) mm.focus();
+        }
+      }
+
+      dd.addEventListener("input", onInput);
+      mm.addEventListener("input", onInput);
+      yy.addEventListener("input", onInput);
+
+      dd.addEventListener("keydown", onKeydown);
+      mm.addEventListener("keydown", onKeydown);
+      yy.addEventListener("keydown", onKeydown);
+    });
+  }
+
 
   function renderScores(){
     const box = el("scoresBox");
@@ -352,6 +482,8 @@
     fillSelect(el("qs_student"), cache.students, "student_id", "name", "—");
     fillSelect(el("ev_student"), cache.students, "student_id", "name", "—");
 
+    applyStudentFilter_();
+
     if(urlStudentId){
       el("st_id").value = urlStudentId;
       el("qs_student").value = urlStudentId;
@@ -363,25 +495,12 @@
 
   // aluno da URL
   el("btnLoadFromUrl").addEventListener("click", async ()=>{
-    const sid = el("st_id").value.trim();
-    if(!sid){ window.UI.toast("Informe um student_id.", "err"); return; }
-    try{
-      const rep = await window.Api.apiPost("getStudentReport", { student_id: sid });
-      const st = rep.student;
-      el("st_name").value = st.name || "";
-      el("st_sex").value = st.sex || "";
-      el("st_birth").value = st.birth_date || "";
-      el("st_phone").value = st.phone_display || st.phone_e164 || "";
-      el("st_photo").value = st.photo_url || "";
-      el("st_sector").value = st.sector_current_id || "";
-      el("st_type").value = st.scholarship_type_id || "";
-      el("st_work").value = st.workload_minutes || "";
-      el("st_status").value = st.status || "ACTIVE";
-      window.UI.toast("Aluno carregado.", "ok");
-    }catch(e){
-      window.UI.toast(e.message || String(e), "err");
-    }
-  });
+  const sid = (window.UI.getParam("student_id") || "").trim();
+  if(!sid){ window.UI.toast("Informe student_id na URL.", "err"); return; }
+  await loadStudentById_(sid);
+});
+
+
 
   // salvar aluno
   el("studentForm").addEventListener("submit", async (ev)=>{
@@ -394,7 +513,7 @@
 
     const payload = {
       student: {
-        student_id: el("st_id").value.trim(),
+        student_id: String(currentStudentId || "").trim(),
         name: el("st_name").value.trim(),
         sex: el("st_sex").value,
         birth_date: el("st_birth").value.trim(),
@@ -411,9 +530,11 @@
 
     try{
       const res = await window.Api.apiPost("upsertStudent", payload);
-      if(!el("st_id").value.trim()) el("st_id").value = res.student_id;
+      if(!currentStudentId) currentStudentId = res.student_id;
+      el("st_id").value = currentStudentId;
       window.UI.toast("Aluno salvo.", "ok");
-      await refreshAll();
+      initDate3_();
+  await refreshAll();
     }catch(e){
       window.UI.toast(e.message || String(e), "err");
     }
