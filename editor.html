@@ -54,10 +54,13 @@
       <div class="card-body ios-card-body">
         <form id="studentForm">
           
-<input type="hidden" id="st_id" value="">
-
-<div class="mb-2 d-grid">
-  <button class="btn btn-outline-primary" type="button" id="btnOpenStudentPicker">Carregar aluno para editar</button>
+<div class="mb-2">
+  <label class="form-label">student_id</label>
+  <div class="input-group">
+    <input class="form-control" id="st_id" placeholder="(deixe vazio para criar)">
+    <button class="btn btn-outline-primary" type="button" id="btnOpenStudentPicker" title="Carregar aluno para editar">Carregar</button>
+  </div>
+  <div class="form-text">Para criar novo aluno: deixe vazio. Para editar: clique em Carregar e escolha na lista.</div>
 </div>
 <div class="form-text mb-2">Para criar novo aluno: não carregue ninguém e preencha os campos abaixo.</div>
 
@@ -294,6 +297,25 @@
   window.UI.mountNav("editor");
 
   const el = (id)=>document.getElementById(id);
+
+  // Máscara de data (campo único DD/MM/AAAA -> hidden YYYY-MM-DD)
+  bindDateMask_("st_birth_ui", "st_birth");
+  bindDateMask_("ev_date_ui", "ev_date");
+
+  // Data da avaliação = hoje
+  (function setToday_(){
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2,"0");
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const yyyy = String(d.getFullYear());
+    const br = `${dd}/${mm}/${yyyy}`;
+    const iso = `${yyyy}-${mm}-${dd}`;
+    const ui = document.getElementById("ev_date_ui");
+    const hid = document.getElementById("ev_date");
+    if(ui) ui.value = br;
+    if(hid) hid.value = iso;
+  })();
+
   const urlStudentId = window.UI.getParam("student_id") || "";
 
   function todayISO(){
@@ -351,6 +373,32 @@
       const iso = brToIso_(ui.value);
       hidden.value = iso || "";
     });
+  }
+
+  function clearStudentForm_(){
+    // limpa campos do formulário de aluno após salvar com sucesso
+    currentStudentId = "";
+    const ids = [
+      "st_id","st_name","st_sex","st_birth_ui","st_birth",
+      "st_phone","st_photo","st_sector","st_type","st_work","st_status"
+    ];
+    ids.forEach(id=>{
+      const e = document.getElementById(id);
+      if(!e) return;
+      if(e.tagName === "SELECT"){
+        e.value = "";
+      }else{
+        e.value = "";
+      }
+    });
+
+    // defaults
+    const stStatus = document.getElementById("st_status");
+    if(stStatus) stStatus.value = "ACTIVE";
+
+    // mantém foco no nome para próximo cadastro
+    const name = document.getElementById("st_name");
+    if(name) name.focus();
   }
 
   function setTodayOnEval_(){
@@ -467,7 +515,7 @@ el("ev_date").value = todayISO();
         student_id: el("st_id").value.trim(),
         name: el("st_name").value.trim(),
         sex: el("st_sex").value,
-        birth_date: el("st_birth").value.trim(),
+        birth_date: (el("st_birth").value.trim() || (document.getElementById("st_birth_ui") ? brToIso_(document.getElementById("st_birth_ui").value) : "")),
         phone: el("st_phone").value.trim(),
         photo_url: el("st_photo").value.trim(),
         sector_current_id: sectorId,
@@ -484,9 +532,8 @@ el("ev_date").value = todayISO();
       if(!el("st_id").value.trim()) el("st_id").value = res.student_id;
       window.UI.toast("Aluno salvo.", "ok");
       await refreshAll();
-
-
-  // ===== Picker: carregar aluno para editar (busca + lista filtrável) =====
+      clearStudentForm_();
+// ===== Picker: carregar aluno para editar (busca + lista filtrável) =====
   const pickModalEl = document.getElementById("studentPickerModal");
   const pickModal = new bootstrap.Modal(pickModalEl, { backdrop:true, keyboard:true });
 
@@ -524,6 +571,8 @@ el("ev_date").value = todayISO();
     el("st_name").value = st.name || "";
     el("st_sex").value = st.sex || "";
     el("st_birth").value = st.birth_date || "";
+      const sbui = document.getElementById("st_birth_ui");
+      if(sbui) sbui.value = isoToBr_(st.birth_date || "");
     const bUI = document.getElementById("st_birth_ui");
     if(bUI) bUI.value = isoToBr_(st.birth_date || "");
     el("st_phone").value = st.phone_display || st.phone_e164 || "";
@@ -598,7 +647,7 @@ el("ev_date").value = todayISO();
 
     const evaluation = {
       student_id: sid,
-      date: el("ev_date").value.trim() || todayISO(),
+      date: (el("ev_date").value.trim() || (document.getElementById("ev_date_ui") ? brToIso_(document.getElementById("ev_date_ui").value) : "") || todayISO()),
       period_tag: el("ev_period").value.trim(),
       scores: scores,
       written_report: el("ev_written").value
