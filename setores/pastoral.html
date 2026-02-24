@@ -49,6 +49,31 @@
       return `${y}-${m}-${day}`;
     }
 
+
+    function normalizeForFileName(str) {
+      return String(str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+    }
+
+    function fotoFileFromNome(nome) {
+      const tokens = normalizeForFileName(nome).split(' ').filter(Boolean);
+      if (!tokens.length) return '';
+      const first = tokens[0] || '';
+      const last = tokens[tokens.length - 1] || '';
+      return `${first}${last}.png`;
+    }
+
+    function avatarStyleFor(nome) {
+      const file = fotoFileFromNome(nome);
+      if (!file) return '';
+      return `background-image:url('../img/${encodeURIComponent(file)}')`;
+    }
+
     async function getJson(url){
       const r = await fetch(url);
       if (!r.ok) throw new Error('Falha HTTP ao buscar dados');
@@ -84,12 +109,13 @@
       }
 
       alunos.forEach(({nome}) => {
+        const avatarStyle = avatarStyleFor(nome);
         const row = document.createElement('div');
         row.className = 'aluno';
         row.innerHTML = `
           <div class="aluno-top">
             <div class="aluno-left">
-              <div class="avatar"></div>
+              <div class="avatar" style="${avatarStyle}"></div>
               <span>${nome}</span>
             </div>
             <div class="aluno-actions">
