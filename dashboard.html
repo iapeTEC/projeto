@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard de Presença</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#222}
+    .wrap{max-width:1200px;margin:0 auto;padding:16px}
+    .card{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,.08);margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+    .metric{border-left:4px solid #4e73df}
+    .metric h4{margin:0;font-size:12px;color:#666;text-transform:uppercase}
+    .metric .v{font-size:26px;font-weight:700;margin-top:6px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid #e5e7eb;padding:8px;font-size:14px;text-align:left}
+    th{background:#f8fafc}
+    .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end}
+    input,select,button{padding:10px;border:1px solid #cbd5e1;border-radius:8px}
+    button{background:#2563eb;color:#fff;border:none;font-weight:bold;cursor:pointer}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2 style="margin-top:0">Dashboard de Presença (Projetos da Tarde)</h2>
+    <div class="filters">
+      <div><label>Data inicial</label><input type="date" id="startDate"></div>
+      <div><label>Data final</label><input type="date" id="endDate"></div>
+      <div><label>Projeto</label><select id="projectFilter"><option value="">Todos</option></select></div>
+      <div><button id="btnAtualizar">Atualizar</button></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card metric"><h4>Lançamentos</h4><div class="v" id="mTotal">0</div></div>
+    <div class="card metric"><h4>Presentes</h4><div class="v" id="mPres">0</div></div>
+    <div class="card metric"><h4>Faltas</h4><div class="v" id="mFalt">0</div></div>
+    <div class="card metric"><h4>Frequência geral</h4><div class="v" id="mPct">0%</div></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Resumo por projeto</h3>
+    <table id="tblResumo">
+      <thead><tr><th>Projeto</th><th>Total</th><th>Presentes</th><th>Faltas</th><th>Observações</th><th>Freq. %</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Observações recentes</h3>
+    <table id="tblObs">
+      <thead><tr><th>Data</th><th>Projeto</th><th>Aluno</th><th>Presença</th><th>Origem</th><th>Observação</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script>
+const WEB_APP_URL = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || '';
+
+function todayIso(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+if (!WEB_APP_URL) throw new Error('URL do Apps Script não configurada em assets/config.js');
+
+async function getJson(url){ const r=await fetch(url); return r.json(); }
+
+function fillTable(sel, rows, emptyCols){
+  const tb = document.querySelector(sel);
+  tb.innerHTML = '';
+  if (!rows.length){ tb.innerHTML = `<tr><td colspan="${emptyCols}" style="text-align:center;color:#666">Sem dados.</td></tr>`; return; }
+  rows.forEach(trHtml => tb.insertAdjacentHTML('beforeend', trHtml));
+}
+
+async function loadProjects(){
+  const j = await getJson(`${WEB_APP_URL}?acao=listaProjetos`);
+  if (j.status !== 'success') return;
+  const sel = document.getElementById('projectFilter');
+  (j.projects || []).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+}
+
+async function loadDashboard(){
+  const start = document.getElementById('startDate').value || todayIso();
+  const end = document.getElementById('endDate').value || todayIso();
+  const projeto = document.getElementById('projectFilter').value || '';
+
+  const qs = new URLSearchParams({ acao:'dashboard', start, end, projeto, rows:'1' });
+  const j = await getJson(`${WEB_APP_URL}?${qs.toString()}`);
+  if (j.status !== 'success') { alert(j.message || 'Erro'); return; }
+
+  document.getElementById('mTotal').textContent = j.metrics.totalLancamentos;
+  document.getElementById('mPres').textContent = j.metrics.presentes;
+  document.getElementById('mFalt').textContent = j.metrics.faltas;
+  document.getElementById('mPct').textContent = `${j.metrics.frequenciaPct}%`;
+
+  fillTable('#tblResumo tbody',
+    (j.resumoPorGrupo || []).map(r => `<tr>
+      <td>${r.group}</td><td>${r.total}</td><td>${r.presentes}</td><td>${r.faltas}</td><td>${r.observacoes}</td><td>${r.frequenciaPct}%</td>
+    </tr>`),
+    6
+  );
+
+  fillTable('#tblObs tbody',
+    (j.observacoes || []).map(r => `<tr>
+      <td>${r.date}</td><td>${r.group}</td><td>${r.student}</td><td>${r.present ? 'Presente' : 'Falta'}</td><td>${r.source || ''}</td><td>${String(r.observation||'').replace(/</g,'&lt;')}</td>
+    </tr>`),
+    6
+  );
+}
+
+(async function(){
+  const t = todayIso();
+  startDate.value = t; endDate.value = t;
+  await loadProjects();
+  await loadDashboard();
+  btnAtualizar.addEventListener('click', loadDashboard);
+})();
+</script>
+</body>
+</html>
