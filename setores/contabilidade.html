@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chamada – Contabilidade</title>
+  <link rel="stylesheet" href="../styleApontamento.css">
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Chamada – <span id="groupTitle">Contabilidade</span></h1>
+      <div class="subheader">
+        <div>Responsável: <span class="resp" id="responsavel">—</span></div>
+        <div class="date-row">
+          <label for="chamadaData">Data:</label>
+          <input type="date" id="chamadaData">
+        </div>
+      </div>
+
+      <div class="alunos">
+        <h2>Alunos do projeto</h2>
+        <div id="lista-alunos"></div>
+      </div>
+
+      <div class="btn-row">
+        <button id="enviar" class="primary">Enviar presença</button>
+        <button id="recarregar" class="secondary">Recarregar lista</button>
+      </div>
+      <p class="small">A lista é carregada da planilha central (coluna B = aluno, coluna M = projeto).</p>
+    </div>
+  </div>
+
+  <script src="../assets/config2.js"></script>
+  <script>
+    const PROJECT = 'Contabilidade';
+    const WEB_APP_URL = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || '';
+
+    if (!WEB_APP_URL) throw new Error('URL do Apps Script não configurada em assets/config2.js');
+
+    let alunos = [];
+    let responsavel = '';
+
+    function isoTodayInTZ() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+
+    async function getJson(url){
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Falha HTTP ao buscar dados');
+      return r.json();
+    }
+
+    async function loadRoster() {
+      const qs = new URLSearchParams({ acao:'rosterProjeto', projeto: PROJECT });
+      const data = await getJson(`${WEB_APP_URL}?${qs.toString()}`);
+      if (data.status !== 'success') throw new Error(data.message || 'Erro no roster');
+      alunos = (data.students || []).sort((a,b)=> a.nome.localeCompare(b.nome,'pt-BR'));
+
+      // opcional: tentar responsável via dashboard/lista grupos no futuro.
+      responsavel = 'Responsável do setor';
+      try {
+        const g = await getJson(`${WEB_APP_URL}?acao=listaProjetos`);
+        if (g.status === 'success') {
+          // apenas valida se existe; o responsável pode ser mantido manual no Groups
+        }
+      } catch(e){}
+    }
+
+    function render() {
+      document.getElementById('groupTitle').textContent = PROJECT;
+      document.getElementById('responsavel').textContent = responsavel;
+
+      const lista = document.getElementById('lista-alunos');
+      lista.innerHTML = '';
+
+      if (!alunos.length) {
+        lista.innerHTML = '<div class="small">Nenhum aluno encontrado neste projeto hoje (na planilha de origem).</div>';
+        return;
+      }
+
+      alunos.forEach(({nome}) => {
+        const row = document.createElement('div');
+        row.className = 'aluno';
+        row.innerHTML = `
+          <div class="aluno-top">
+            <div class="aluno-left">
+              <div class="avatar"></div>
+              <span>${nome}</span>
+            </div>
+            <div class="aluno-actions">
+              <button type="button" class="obs-toggle" aria-pressed="false">OBS</button>
+              <label class="switch-presenca" title="Presença">
+                <input type="checkbox" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="obs-box">
+            <textarea placeholder="Observação sobre o aluno (opcional)..."></textarea>
+            <div class="obs-hint">Será enviada junto com a presença/falta.</div>
+          </div>
+        `;
+        const btnObs = row.querySelector('.obs-toggle');
+        const obsBox = row.querySelector('.obs-box');
+        const txtObs = row.querySelector('textarea');
+
+        btnObs.addEventListener('click', () => {
+          const active = btnObs.classList.toggle('active');
+          obsBox.classList.toggle('active', active);
+          btnObs.setAttribute('aria-pressed', active ? 'true' : 'false');
+          if (!active) txtObs.value = '';
+          else txtObs.focus();
+        });
+
+        lista.appendChild(row);
+      });
+    }
+
+    function coletarPresencas() {
+      const dados = [];
+      document.querySelectorAll('#lista-alunos .aluno').forEach(div => {
+        const nome = div.querySelector('.aluno-left span').textContent.trim();
+        const presente = div.querySelector('.switch-presenca input[type="checkbox"]').checked ? 1 : 0;
+        const obsAtivo = div.querySelector('.obs-toggle').classList.contains('active') ? 1 : 0;
+        const observacao = (div.querySelector('.obs-box textarea').value || '').trim();
+        dados.push({ nome, presente, obsAtivo, observacao: obsAtivo ? observacao : '' });
+      });
+      return dados;
+    }
+
+    async function enviarFrequencia() {
+      const dataISO = (document.getElementById('chamadaData').value || isoTodayInTZ()).slice(0,10);
+      const payload = {
+        acao: 'registrarFrequencia',
+        grupo: PROJECT,
+        responsavel: responsavel,
+        data: dataISO,
+        alunos: coletarPresencas()
+      };
+      try {
+        await fetch(WEB_APP_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify(payload)
+        });
+        document.body.innerHTML = `
+          <div class="resultado sucesso">
+            Frequência de <b>${PROJECT}</b> enviada.<br>
+            Data: ${dataISO}<br><br>
+            <button class="secondary" onclick="location.reload()">Voltar</button>
+          </div>`;
+      } catch (err) {
+        document.body.innerHTML = `
+          <div class="resultado erro">
+            Erro ao enviar.<br><small>${String(err.message || err)}</small><br><br>
+            <button class="secondary" onclick="location.reload()">Voltar</button>
+          </div>`;
+      }
+    }
+
+    async function init() {
+      document.getElementById('chamadaData').value = isoTodayInTZ();
+      await loadRoster();
+      render();
+
+      document.getElementById('enviar').addEventListener('click', enviarFrequencia);
+      document.getElementById('recarregar').addEventListener('click', async () => {
+        await loadRoster();
+        render();
+      });
+    }
+
+    init().catch(err => {
+      console.error(err);
+      alert('Erro ao carregar lista: ' + (err.message || err));
+    });
+  </script>
+</body>
+</html>
