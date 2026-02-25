@@ -42,9 +42,206 @@
   }
   .report-section { page-break-inside: avoid; }
 }
+/* ===== SB Admin 2 inspired visual polish ===== */
+:root{
+  --sb-primary:#4e73df;
+  --sb-success:#1cc88a;
+  --sb-info:#36b9cc;
+  --sb-warning:#f6c23e;
+  --sb-danger:#e74a3b;
+  --sb-dark:#5a5c69;
+  --sb-muted:#858796;
+  --sb-border:#e3e6f0;
+  --sb-bg:#f8f9fc;
+  --sb-card:#ffffff;
+  --sb-shadow:0 .15rem 1.75rem 0 rgba(58,59,69,.15);
+}
+html,body{
+  background:var(--sb-bg) !important;
+  color:#2e2f37;
+  font-family:'Nunito',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif !important;
+}
+.container, .wrapper, .page, .dashboard, main{
+  max-width:1200px;
+  margin:18px auto;
+}
+body > .container, body > .wrapper, body > main, body > .page {
+  padding:0 14px;
+}
+h1,h2,h3{
+  color:#5a5c69;
+  font-weight:800;
+  letter-spacing:.01em;
+}
+h1{
+  font-size:1.65rem;
+  margin:.2rem 0 1rem;
+}
+.card, .panel, .box, .metric-card, .table-card, .filters, .section{
+  background:var(--sb-card);
+  border:1px solid var(--sb-border);
+  border-radius:.5rem;
+  box-shadow:var(--sb-shadow);
+}
+.filters{
+  padding:14px;
+  margin-bottom:14px;
+}
+.filters label{
+  color:var(--sb-dark);
+  font-weight:700;
+  font-size:.9rem;
+}
+.filters input, .filters select, input[type="date"], select{
+  border:1px solid #d1d3e2;
+  border-radius:.35rem;
+  padding:.45rem .6rem;
+  font-size:.92rem;
+  background:#fff;
+  color:#3a3b45;
+}
+.filters input:focus, .filters select:focus, input[type="date"]:focus, select:focus{
+  outline:none;
+  border-color:#bac8f3;
+  box-shadow:0 0 0 .2rem rgba(78,115,223,.18);
+}
+button{
+  border:1px solid transparent;
+  border-radius:.35rem;
+  padding:.48rem .8rem;
+  font-weight:700;
+  cursor:pointer;
+  color:#fff;
+  background:var(--sb-primary);
+  box-shadow:0 .125rem .25rem 0 rgba(58,59,69,.2);
+}
+button:hover{ filter:brightness(.98); transform:translateY(-1px); }
+button:active{ transform:none; }
+#btnImprimirFaltas{
+  background:var(--sb-info) !important;
+}
+.summary, .metrics, .cards-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  gap:14px;
+  margin:14px 0;
+}
+.metric, .metric-card{
+  position:relative;
+  padding:14px 16px;
+  border-left:.35rem solid var(--sb-primary);
+}
+.metric .label, .metric-title{
+  color:var(--sb-primary);
+  text-transform:uppercase;
+  font-size:.72rem;
+  font-weight:800;
+  letter-spacing:.06em;
+  margin-bottom:.3rem;
+}
+.metric .value, .metric-value{
+  color:#5a5c69;
+  font-size:1.35rem;
+  font-weight:800;
+  line-height:1.1;
+}
+.metric.presenca{ border-left-color:var(--sb-success); }
+.metric.presenca .label{ color:var(--sb-success); }
+.metric.falta{ border-left-color:var(--sb-danger); }
+.metric.falta .label{ color:var(--sb-danger); }
+.metric.obs{ border-left-color:var(--sb-warning); }
+.metric.obs .label{ color:#b08916; }
+.metric.freq{ border-left-color:var(--sb-info); }
+.metric.freq .label{ color:var(--sb-info); }
+
+/* Generic table styling */
+table{
+  width:100%;
+  border-collapse:collapse;
+  background:#fff;
+}
+th, td{
+  border-bottom:1px solid var(--sb-border);
+  padding:.6rem .7rem;
+  text-align:left;
+  vertical-align:top;
+  font-size:.92rem;
+}
+thead th{
+  background:#f8f9fc;
+  color:#6e707e;
+  font-size:.78rem;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  font-weight:800;
+}
+tbody tr:nth-child(even){ background:#fbfcff; }
+tbody tr:hover{ background:#f3f6ff; }
+
+.table-wrap, .table-card, .card-table{
+  padding:0;
+  overflow:auto;
+  margin-top:14px;
+}
+.table-card .title, .card-header, .section-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:.85rem 1rem;
+  border-bottom:1px solid var(--sb-border);
+  background:#fff;
+  border-radius:.5rem .5rem 0 0;
+  color:var(--sb-primary);
+  font-weight:800;
+}
+
+/* Try to style common "stats" spans if present */
+.badge, .pill{
+  display:inline-block;
+  border-radius:999px;
+  padding:.15rem .5rem;
+  font-size:.75rem;
+  font-weight:700;
+  border:1px solid var(--sb-border);
+  background:#fff;
+  color:#5a5c69;
+}
+.small, small{ color:var(--sb-muted); }
+
+/* Print button area wrapping */
+.actions-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+/* Better mobile layout */
+@media (max-width: 768px){
+  body > .container, body > .wrapper, body > main, body > .page { padding:0 10px; }
+  h1{ font-size:1.25rem; }
+  .filters{ padding:12px; }
+  th, td{ padding:.5rem .55rem; font-size:.86rem; }
+  button{ width:auto; }
+}
 </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 <body>
+  <div class="sb-topbar" style="background:#fff;border-bottom:1px solid #e3e6f0;box-shadow:0 .15rem .35rem 0 rgba(58,59,69,.08);">
+    <div style="max-width:1200px;margin:0 auto;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;color:#4e73df;font-weight:800;">
+        <span style="width:10px;height:10px;border-radius:50%;background:#4e73df;display:inline-block;"></span>
+        Dashboard de Frequência
+      </div>
+      <div style="font-size:.85rem;color:#858796;">Projetos • Tarde</div>
+    </div>
+  </div>
+
 <div class="wrap">
   <div class="card">
     <h2 style="margin-top:0">Dashboard de Presença (Projetos da Tarde)</h2>
@@ -122,7 +319,6 @@ async function loadProjects(){
     o.textContent = resp ? `${nome} — ${resp}` : nome;
     sel.appendChild(o);
   });
-});
 }
 
 async function loadDashboard(){
