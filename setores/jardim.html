@@ -27,7 +27,7 @@
         <button id="enviar" class="primary">Enviar presença</button>
         <button id="recarregar" class="secondary">Recarregar lista</button>
       </div>
-      <p class="small">A lista é carregada da planilha central (coluna B = aluno, coluna M = projeto).</p>
+      <p class="small">A lista é carregada da planilha central (STUDENTS: B=aluno, M=projeto, I=foto) e responsável em SECTORS (B=setor, C=chefe).</p>
     </div>
   </div>
 
@@ -84,16 +84,30 @@
       const qs = new URLSearchParams({ acao:'rosterProjeto', projeto: PROJECT });
       const data = await getJson(`${WEB_APP_URL}?${qs.toString()}`);
       if (data.status !== 'success') throw new Error(data.message || 'Erro no roster');
-      alunos = (data.students || []).sort((a,b)=> a.nome.localeCompare(b.nome,'pt-BR'));
 
-      // opcional: tentar responsável via dashboard/lista grupos no futuro.
-      responsavel = 'Responsável do setor';
-      try {
-        const g = await getJson(`${WEB_APP_URL}?acao=listaProjetos`);
-        if (g.status === 'success') {
-          // apenas valida se existe; o responsável pode ser mantido manual no Groups
-        }
-      } catch(e){}
+      alunos = (data.students || []).map(s => ({
+        nome: s.nome || s.name || '',
+        foto: s.foto || s.photo || s.fotoPath || s.photoPath || s.image || ''
+      })).filter(x => x.nome).sort((a,b)=> a.nome.localeCompare(b.nome,'pt-BR'));
+
+      // Preferência: backend já devolve responsável do setor (SECTORS coluna C)
+      responsavel = (data.responsavel || data.responsible || data.chefe || data.chief || '').trim();
+
+      // Fallback: tenta endpoint de lista geral e encontra por nome do projeto
+      if (!responsavel) {
+        try {
+          const g = await getJson(`${WEB_APP_URL}?acao=listaProjetos`);
+          const lista = g.projetos || g.projects || g.groups || [];
+          const alvo = lista.find(item => {
+            const n = String(item.projeto || item.project || item.group || item.nome || '').trim().toLowerCase();
+            return n === PROJECT.trim().toLowerCase();
+          });
+          responsavel = (alvo && (alvo.responsavel || alvo.responsible || alvo.chefe || alvo.chief)) ?
+            String(alvo.responsavel || alvo.responsible || alvo.chefe || alvo.chief).trim() : '';
+        } catch (e) {}
+      }
+
+      if (!responsavel) responsavel = 'Responsável do setor';
     }
 
     function render() {
@@ -108,8 +122,8 @@
         return;
       }
 
-      alunos.forEach(({nome}) => {
-        const avatarStyle = avatarStyleFor(nome);
+      alunos.forEach(({nome, foto}) => {
+        const avatarStyle = avatarStyleFor(nome, foto);
         const row = document.createElement('div');
         row.className = 'aluno';
         row.innerHTML = `
