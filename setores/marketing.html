@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chamada – Marketing</title>
+  <title>Marketing</title>
   <link rel="stylesheet" href="../styleApontamento.css">
 </head>
 <body>
   <div class="container">
     <div class="card">
-      <h1>Chamada – <span id="groupTitle">Marketing</span></h1>
+      <h1><span id="groupTitle">Marketing</span></h1>
       <div class="subheader">
         <div>Responsável: <span class="resp" id="responsavel">—</span></div>
         <div class="date-row">
@@ -27,13 +27,12 @@
         <button id="enviar" class="primary">Enviar presença</button>
         <button id="recarregar" class="secondary">Recarregar lista</button>
       </div>
-      <p class="small">A lista é carregada da planilha central (STUDENTS: B=aluno, M=projeto, I=foto) e responsável em SECTORS (B=setor, C=chefe).</p>
-    </div>
+</div>
   </div>
 
   <script src="../assets/config2.js"></script>
   <script>
-    const PROJECT = 'Marketing';
+    const PROJECT = "Marketing";
     const WEB_APP_URL = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || '';
 
     if (!WEB_APP_URL) throw new Error('URL do Apps Script não configurada em assets/config2.js');
@@ -60,19 +59,27 @@
         .replace(/\s+/g, ' ');
     }
 
-    function fotoFileFromNome(nome) {
-      const tokens = normalizeForFileName(nome).split(' ').filter(Boolean);
-      if (!tokens.length) return '';
-      const first = tokens[0] || '';
-      const last = tokens[tokens.length - 1] || '';
-      return `${first}${last}.png`;
-    }
+   function fotoFileFromNome(nome) {
+  const tokens = normalizeForFileName(nome).split(' ').filter(Boolean);
+  if (!tokens.length) return '';
+  const first = tokens[0] || '';
+  const last = tokens[tokens.length - 1] || '';
+  return `${first}${last}.png`;
+}
 
-    function avatarStyleFor(nome) {
+function avatarStyleFor(nome, fotoPlanilha) {
+      const foto = String(fotoPlanilha || '').trim();
+
+      if (foto) {
+        const path = /^img\//i.test(foto) ? foto : `img/${foto}`;
+        return `background-image:url('../${encodeURI(path)}')`;
+      }
+
       const file = fotoFileFromNome(nome);
       if (!file) return '';
       return `background-image:url('../img/${encodeURIComponent(file)}')`;
     }
+ 
 
     async function getJson(url){
       const r = await fetch(url);
