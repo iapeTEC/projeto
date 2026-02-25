@@ -18,7 +18,31 @@
     .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end}
     input,select,button{padding:10px;border:1px solid #cbd5e1;border-radius:8px}
     button{background:#2563eb;color:#fff;border:none;font-weight:bold;cursor:pointer}
-  </style>
+  /* Relatório de faltas (impressão/PDF) */
+.report-print{font-family:Arial,sans-serif;color:#111}
+.report-title{font-size:20px;font-weight:700;margin:0 0 4px}
+.report-sub{font-size:12px;color:#555;margin:0 0 14px}
+.report-section{margin:0 0 18px;page-break-inside:avoid}
+.report-section h4{margin:0 0 8px;padding:6px 8px;background:#e5e7eb;border-radius:6px}
+.report-table{width:100%;border-collapse:collapse;font-size:13px}
+.report-table th,.report-table td{border:1px solid #cbd5e1;padding:6px 8px;vertical-align:top}
+.report-table th{background:#f1f5f9}
+.report-table tbody tr:nth-child(even){background:#f8fafc}
+.report-empty{padding:10px;border:1px dashed #cbd5e1;border-radius:6px;color:#555;background:#fafafa}
+
+@media print {
+  body * { visibility: hidden !important; }
+  #printArea, #printArea * { visibility: visible !important; }
+  #printArea {
+    display:block !important;
+    position:absolute;
+    inset:0;
+    background:#fff;
+    padding:12mm;
+  }
+  .report-section { page-break-inside: avoid; }
+}
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -28,7 +52,10 @@
       <div><label>Data inicial</label><input type="date" id="startDate"></div>
       <div><label>Data final</label><input type="date" id="endDate"></div>
       <div><label>Projeto</label><select id="projectFilter"><option value="">Todos</option></select></div>
-      <div><button id="btnAtualizar">Atualizar</button></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button id="btnAtualizar">Atualizar</button>
+        <button id="btnImprimirFaltas" type="button" style="background:#0f766e;">Imprimir faltas do período</button>
+      </div>
     </div>
   </div>
 
@@ -66,24 +93,36 @@ function todayIso(){
 }
 if (!WEB_APP_URL) throw new Error('URL do Apps Script não configurada em assets/config2.js');
 
-async function getJson(url){ const r=await fetch(url); return r.json(); }
-
-function fillTable(sel, rows, emptyCols){
-  const tb = document.querySelector(sel);
-  tb.innerHTML = '';
-  if (!rows.length){ tb.innerHTML = `<tr><td colspan="${emptyCols}" style="text-align:center;color:#666">Sem dados.</td></tr>`; return; }
-  rows.forEach(trHtml => tb.insertAdjacentHTML('beforeend', trHtml));
+async function getJson(url){
+  const r = await fetch(url);
+  const txt = await r.text();
+  let j;
+  try { j = JSON.parse(txt); }
+  catch(e){ throw new Error('Resposta inválida do servidor (não-JSON).'); }
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return j;
 }
 
 async function loadProjects(){
   const j = await getJson(`${WEB_APP_URL}?acao=listaProjetos`);
   if (j.status !== 'success') return;
+
   const sel = document.getElementById('projectFilter');
-  (j.projects || []).forEach(p => {
+  sel.innerHTML = '<option value="">Todos</option>';
+
+  const lista = j.projects || j.projetos || [];
+  lista.forEach(p => {
+    const nome = String((p && (p.projeto || p.project || p.group || p.nome)) || p || '').trim();
+    if (!nome) return;
+
+    const resp = String((p && (p.responsavel || p.responsible || p.chefe)) || '').trim();
+
     const o = document.createElement('option');
-    o.value = p; o.textContent = p;
+    o.value = nome;
+    o.textContent = resp ? `${nome} — ${resp}` : nome;
     sel.appendChild(o);
   });
+});
 }
 
 async function loadDashboard(){
@@ -121,7 +160,10 @@ async function loadDashboard(){
   await loadProjects();
   await loadDashboard();
   btnAtualizar.addEventListener('click', loadDashboard);
+      document.getElementById('btnImprimirFaltas').addEventListener('click', imprimirRelatorioFaltas);
 })();
 </script>
+
+  <div id="printArea" style="display:none"></div>
 </body>
 </html>
