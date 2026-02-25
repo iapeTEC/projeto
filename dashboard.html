@@ -56,7 +56,7 @@
   </div>
 </div>
 
-<script src="assets/config.js"></script>
+<script src="assets/config2.js"></script>
 <script>
 const WEB_APP_URL = (window.APP_CONFIG && window.APP_CONFIG.API_URL) || '';
 
@@ -64,7 +64,7 @@ function todayIso(){
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-if (!WEB_APP_URL) throw new Error('URL do Apps Script não configurada em assets/config.js');
+if (!WEB_APP_URL) throw new Error('URL do Apps Script não configurada em assets/config2.js');
 
 async function getJson(url){ const r=await fetch(url); return r.json(); }
 
