@@ -18,7 +18,36 @@
     .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end}
     input,select,button{padding:10px;border:1px solid #cbd5e1;border-radius:8px}
     button{background:#2563eb;color:#fff;border:none;font-weight:bold;cursor:pointer}
-  /* Relatório de faltas (impressão/PDF) */
+  
+/* ===== SB Admin 2 inspired polish ===== */
+:root{
+  --sb-primary:#4e73df; --sb-success:#1cc88a; --sb-info:#36b9cc;
+  --sb-warning:#f6c23e; --sb-danger:#e74a3b; --sb-dark:#5a5c69;
+  --sb-muted:#858796; --sb-border:#e3e6f0; --sb-bg:#f8f9fc;
+  --sb-shadow:0 .15rem 1.75rem 0 rgba(58,59,69,.15);
+}
+body{background:var(--sb-bg)!important;color:#2e2f37!important;font-family:'Nunito',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif!important}
+.wrap{max-width:1220px!important;padding:16px 14px!important}
+.card{border:1px solid var(--sb-border)!important;border-radius:.5rem!important;box-shadow:var(--sb-shadow)!important;background:#fff!important}
+h2{color:#5a5c69;font-weight:800;letter-spacing:.01em}
+label{color:#5a5c69;font-weight:700;font-size:.9rem}
+input,select{border:1px solid #d1d3e2!important;border-radius:.35rem!important;padding:.48rem .65rem!important;background:#fff}
+input:focus,select:focus{outline:none;border-color:#bac8f3!important;box-shadow:0 0 0 .2rem rgba(78,115,223,.18)}
+button{border-radius:.35rem!important;border:1px solid transparent!important;padding:.5rem .85rem!important;font-weight:700!important;background:var(--sb-primary)!important;color:#fff!important;cursor:pointer;box-shadow:0 .125rem .25rem rgba(58,59,69,.2)}
+button:hover{filter:brightness(.98)}
+.metric{border-left:.35rem solid var(--sb-primary)!important}
+.metric:nth-child(2){border-left-color:var(--sb-success)!important}
+.metric:nth-child(3){border-left-color:var(--sb-danger)!important}
+.metric:nth-child(4){border-left-color:var(--sb-info)!important}
+.metric h4{font-size:.72rem!important;font-weight:800!important;letter-spacing:.06em;color:#6e707e!important}
+.metric .v{font-size:1.45rem!important;color:#5a5c69!important;font-weight:800!important}
+th,td{border-color:var(--sb-border)!important}
+thead th{background:#f8f9fc;color:#6e707e;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;font-weight:800}
+tbody tr:nth-child(even){background:#fbfcff}
+tbody tr:hover{background:#f3f6ff}
+small,.small{color:#858796}
+
+/* Print report area */
 .report-print{font-family:Arial,sans-serif;color:#111}
 .report-title{font-size:20px;font-weight:700;margin:0 0 4px}
 .report-sub{font-size:12px;color:#555;margin:0 0 14px}
@@ -31,217 +60,29 @@
 .report-empty{padding:10px;border:1px dashed #cbd5e1;border-radius:6px;color:#555;background:#fafafa}
 
 @media print {
-  body * { visibility: hidden !important; }
-  #printArea, #printArea * { visibility: visible !important; }
-  #printArea {
-    display:block !important;
-    position:absolute;
-    inset:0;
-    background:#fff;
-    padding:12mm;
-  }
+  body * { visibility:hidden !important; }
+  #printArea, #printArea * { visibility:visible !important; }
+  #printArea { display:block !important; position:absolute; inset:0; background:#fff; padding:12mm; }
   .report-section { page-break-inside: avoid; }
 }
-/* ===== SB Admin 2 inspired visual polish ===== */
-:root{
-  --sb-primary:#4e73df;
-  --sb-success:#1cc88a;
-  --sb-info:#36b9cc;
-  --sb-warning:#f6c23e;
-  --sb-danger:#e74a3b;
-  --sb-dark:#5a5c69;
-  --sb-muted:#858796;
-  --sb-border:#e3e6f0;
-  --sb-bg:#f8f9fc;
-  --sb-card:#ffffff;
-  --sb-shadow:0 .15rem 1.75rem 0 rgba(58,59,69,.15);
-}
-html,body{
-  background:var(--sb-bg) !important;
-  color:#2e2f37;
-  font-family:'Nunito',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif !important;
-}
-.container, .wrapper, .page, .dashboard, main{
-  max-width:1200px;
-  margin:18px auto;
-}
-body > .container, body > .wrapper, body > main, body > .page {
-  padding:0 14px;
-}
-h1,h2,h3{
-  color:#5a5c69;
-  font-weight:800;
-  letter-spacing:.01em;
-}
-h1{
-  font-size:1.65rem;
-  margin:.2rem 0 1rem;
-}
-.card, .panel, .box, .metric-card, .table-card, .filters, .section{
-  background:var(--sb-card);
-  border:1px solid var(--sb-border);
-  border-radius:.5rem;
-  box-shadow:var(--sb-shadow);
-}
-.filters{
-  padding:14px;
-  margin-bottom:14px;
-}
-.filters label{
-  color:var(--sb-dark);
-  font-weight:700;
-  font-size:.9rem;
-}
-.filters input, .filters select, input[type="date"], select{
-  border:1px solid #d1d3e2;
-  border-radius:.35rem;
-  padding:.45rem .6rem;
-  font-size:.92rem;
-  background:#fff;
-  color:#3a3b45;
-}
-.filters input:focus, .filters select:focus, input[type="date"]:focus, select:focus{
-  outline:none;
-  border-color:#bac8f3;
-  box-shadow:0 0 0 .2rem rgba(78,115,223,.18);
-}
-button{
-  border:1px solid transparent;
-  border-radius:.35rem;
-  padding:.48rem .8rem;
-  font-weight:700;
-  cursor:pointer;
-  color:#fff;
-  background:var(--sb-primary);
-  box-shadow:0 .125rem .25rem 0 rgba(58,59,69,.2);
-}
-button:hover{ filter:brightness(.98); transform:translateY(-1px); }
-button:active{ transform:none; }
-#btnImprimirFaltas{
-  background:var(--sb-info) !important;
-}
-.summary, .metrics, .cards-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
-  gap:14px;
-  margin:14px 0;
-}
-.metric, .metric-card{
-  position:relative;
-  padding:14px 16px;
-  border-left:.35rem solid var(--sb-primary);
-}
-.metric .label, .metric-title{
-  color:var(--sb-primary);
-  text-transform:uppercase;
-  font-size:.72rem;
-  font-weight:800;
-  letter-spacing:.06em;
-  margin-bottom:.3rem;
-}
-.metric .value, .metric-value{
-  color:#5a5c69;
-  font-size:1.35rem;
-  font-weight:800;
-  line-height:1.1;
-}
-.metric.presenca{ border-left-color:var(--sb-success); }
-.metric.presenca .label{ color:var(--sb-success); }
-.metric.falta{ border-left-color:var(--sb-danger); }
-.metric.falta .label{ color:var(--sb-danger); }
-.metric.obs{ border-left-color:var(--sb-warning); }
-.metric.obs .label{ color:#b08916; }
-.metric.freq{ border-left-color:var(--sb-info); }
-.metric.freq .label{ color:var(--sb-info); }
 
-/* Generic table styling */
-table{
-  width:100%;
-  border-collapse:collapse;
-  background:#fff;
-}
-th, td{
-  border-bottom:1px solid var(--sb-border);
-  padding:.6rem .7rem;
-  text-align:left;
-  vertical-align:top;
-  font-size:.92rem;
-}
-thead th{
-  background:#f8f9fc;
-  color:#6e707e;
-  font-size:.78rem;
-  text-transform:uppercase;
-  letter-spacing:.04em;
-  font-weight:800;
-}
-tbody tr:nth-child(even){ background:#fbfcff; }
-tbody tr:hover{ background:#f3f6ff; }
-
-.table-wrap, .table-card, .card-table{
-  padding:0;
-  overflow:auto;
-  margin-top:14px;
-}
-.table-card .title, .card-header, .section-header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:.85rem 1rem;
-  border-bottom:1px solid var(--sb-border);
-  background:#fff;
-  border-radius:.5rem .5rem 0 0;
-  color:var(--sb-primary);
-  font-weight:800;
-}
-
-/* Try to style common "stats" spans if present */
-.badge, .pill{
-  display:inline-block;
-  border-radius:999px;
-  padding:.15rem .5rem;
-  font-size:.75rem;
-  font-weight:700;
-  border:1px solid var(--sb-border);
-  background:#fff;
-  color:#5a5c69;
-}
-.small, small{ color:var(--sb-muted); }
-
-/* Print button area wrapping */
-.actions-row{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  align-items:center;
-}
-
-/* Better mobile layout */
-@media (max-width: 768px){
-  body > .container, body > .wrapper, body > main, body > .page { padding:0 10px; }
-  h1{ font-size:1.25rem; }
-  .filters{ padding:12px; }
-  th, td{ padding:.5rem .55rem; font-size:.86rem; }
-  button{ width:auto; }
-}
 </style>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 <body>
-  <div class="sb-topbar" style="background:#fff;border-bottom:1px solid #e3e6f0;box-shadow:0 .15rem .35rem 0 rgba(58,59,69,.08);">
-    <div style="max-width:1200px;margin:0 auto;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <div style="display:flex;align-items:center;gap:10px;color:#4e73df;font-weight:800;">
+  <div style="background:#fff;border-bottom:1px solid #e3e6f0;box-shadow:0 .15rem .35rem rgba(58,59,69,.08);">
+    <div style="max-width:1220px;margin:0 auto;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <div style="font-weight:800;color:#4e73df;display:flex;align-items:center;gap:8px;">
         <span style="width:10px;height:10px;border-radius:50%;background:#4e73df;display:inline-block;"></span>
         Dashboard de Frequência
       </div>
       <div style="font-size:.85rem;color:#858796;">Projetos • Tarde</div>
     </div>
   </div>
-
 <div class="wrap">
   <div class="card">
     <h2 style="margin-top:0">Dashboard de Presença (Projetos da Tarde)</h2>
@@ -249,10 +90,8 @@ tbody tr:hover{ background:#f3f6ff; }
       <div><label>Data inicial</label><input type="date" id="startDate"></div>
       <div><label>Data final</label><input type="date" id="endDate"></div>
       <div><label>Projeto</label><select id="projectFilter"><option value="">Todos</option></select></div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button id="btnAtualizar">Atualizar</button>
-        <button id="btnImprimirFaltas" type="button" style="background:#0f766e;">Imprimir faltas do período</button>
-      </div>
+      <div><button id="btnAtualizar"><i class="fa-solid fa-rotate-right"></i> Atualizar</button>
+      <button id="btnImprimirFaltas" type="button" style="background:#36b9cc;"><i class="fa-solid fa-print"></i> Imprimir faltas do período</button></div>
     </div>
   </div>
 
@@ -300,6 +139,105 @@ async function getJson(url){
   return j;
 }
 
+
+function escapeHtml(s){
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function groupAbsencesByProject(rows){
+  const map = {};
+  rows.forEach(r => {
+    if (Number(r.present) === 1) return;
+    const projeto = String(r.group || r.projeto || 'Sem projeto').trim() || 'Sem projeto';
+    if (!map[projeto]) map[projeto] = [];
+    map[projeto].push(r);
+  });
+
+  return Object.keys(map)
+    .sort((a,b)=>a.localeCompare(b,'pt-BR'))
+    .map(projeto => ({
+      projeto,
+      itens: map[projeto].sort((a,b)=>String(a.student||'').localeCompare(String(b.student||''),'pt-BR'))
+    }));
+}
+
+function buildPrintReportFromDashboardData(j){
+  const start = document.getElementById('startDate').value || todayIso();
+  const end = document.getElementById('endDate').value || todayIso();
+
+  const rows = Array.isArray(j.rows) ? j.rows : [];
+  const groups = groupAbsencesByProject(rows);
+
+  const totalFaltas = rows.filter(r => Number(r.present) !== 1).length;
+  const totalSetoresComFalta = groups.length;
+
+  let out = `
+    <div class="report-print">
+      <p class="report-title">Relatório de Faltas</p>
+      <p class="report-sub">
+        Período: ${escapeHtml(start)} a ${escapeHtml(end)}<br>
+        Total de faltas: ${totalFaltas} | Setores com faltas: ${totalSetoresComFalta}
+      </p>
+  `;
+
+  if (!groups.length){
+    out += `<div class="report-empty">Nenhuma falta registrada no período selecionado.</div>`;
+  } else {
+    groups.forEach(g => {
+      out += `
+        <section class="report-section">
+          <h4>${escapeHtml(g.projeto)} (${g.itens.length} falta${g.itens.length > 1 ? 's' : ''})</h4>
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th style="width:110px">Data</th>
+                <th style="width:34%">Aluno</th>
+                <th style="width:140px">Responsável</th>
+                <th style="width:90px">Origem</th>
+                <th>Observação</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      g.itens.forEach(r => {
+        out += `
+          <tr>
+            <td>${escapeHtml(r.date || '')}</td>
+            <td>${escapeHtml(r.student || '')}</td>
+            <td>${escapeHtml(r.responsible || '')}</td>
+            <td>${escapeHtml(r.source || '')}</td>
+            <td>${escapeHtml(r.observation || '')}</td>
+          </tr>
+        `;
+      });
+      out += `</tbody></table></section>`;
+    });
+  }
+
+  out += `</div>`;
+  return out;
+}
+
+async function imprimirRelatorioFaltas(){
+  const start = document.getElementById('startDate').value || todayIso();
+  const end = document.getElementById('endDate').value || todayIso();
+  const projeto = document.getElementById('projectFilter').value || '';
+
+  const qs = new URLSearchParams({ acao:'dashboard', start, end, projeto, rows:'1' });
+  const j = await getJson(`${WEB_APP_URL}?${qs.toString()}`);
+  if (j.status !== 'success') { alert(j.message || 'Erro ao gerar relatório'); return; }
+
+  const printArea = document.getElementById('printArea');
+  if (printArea) printArea.innerHTML = buildPrintReportFromDashboardData(j);
+
+  setTimeout(() => window.print(), 120);
+}
+
+
 async function loadProjects(){
   const j = await getJson(`${WEB_APP_URL}?acao=listaProjetos`);
   if (j.status !== 'success') return;
@@ -307,12 +245,12 @@ async function loadProjects(){
   const sel = document.getElementById('projectFilter');
   sel.innerHTML = '<option value="">Todos</option>';
 
-  const lista = j.projects || j.projetos || [];
+  const lista = j.projects || j.projetos || j.groups || [];
   lista.forEach(p => {
     const nome = String((p && (p.projeto || p.project || p.group || p.nome)) || p || '').trim();
     if (!nome) return;
 
-    const resp = String((p && (p.responsavel || p.responsible || p.chefe)) || '').trim();
+    const resp = String((p && (p.responsavel || p.responsible || p.chefe || p.chief)) || '').trim();
 
     const o = document.createElement('option');
     o.value = nome;
@@ -356,10 +294,10 @@ async function loadDashboard(){
   await loadProjects();
   await loadDashboard();
   btnAtualizar.addEventListener('click', loadDashboard);
-      document.getElementById('btnImprimirFaltas').addEventListener('click', imprimirRelatorioFaltas);
+  document.getElementById('btnImprimirFaltas').addEventListener('click', imprimirRelatorioFaltas);
 })();
 </script>
 
-  <div id="printArea" style="display:none"></div>
+<div id="printArea" style="display:none"></div>
 </body>
 </html>
