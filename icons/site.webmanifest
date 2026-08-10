@@ -1,0 +1,14 @@
+{
+  "name": "IAPE • Gestão Estudantil",
+  "short_name": "IAPE Alunos",
+  "description": "Gestão acadêmica de alunos, avaliações, projetos e frequência.",
+  "start_url": "../escolhersetores.html",
+  "scope": "../",
+  "display": "standalone",
+  "background_color": "#f2f6fa",
+  "theme_color": "#12365d",
+  "icons": [
+    { "src": "android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

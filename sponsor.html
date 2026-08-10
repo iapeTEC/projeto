@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <title>Relatório do Sponsor • Bolsistas</title>
+  <title>Relatório de acompanhamento • IAPE</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -11,10 +11,10 @@
   <link rel="alternate icon" href="icons/favicon.ico">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="icons/site.webmanifest">
-  <link rel="mask-icon" href="icons/safari-pinned-tab.svg" color="#0B1D39">
   <meta name="msapplication-TileColor" content="#0B1D39">
 
   <script src="assets/config.js"></script>
+  <script src="assets/loading.js"></script>
   <script src="assets/api.js"></script>
   <script src="assets/ui.js"></script>
 
@@ -41,22 +41,23 @@
     }
   </style>
 </head>
-<body>
+<body class="page-soft">
   <div id="appNav" class="no-print"></div>
 
-  <div class="container py-3 report-wrap">
+  <div class="container app-page report-wrap">
     <div id="toastArea"></div>
 
-    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+    <header class="page-heading">
       <div>
-        <div class="section-title h4 mb-1">Relatório do Sponsor</div>
-        <div class="small-note">Resumo de acompanhamento com linguagem neutra e foco formativo.</div>
+        <p class="page-eyebrow">Prestação de contas</p>
+        <h1 class="page-title">Relatório de acompanhamento</h1>
+        <p class="page-description">Resumo formativo para apoiadores e equipe educacional.</p>
       </div>
-      <div class="no-print d-flex gap-2">
+      <div class="page-actions no-print">
         <button class="btn btn-outline-secondary" id="btnBack">Voltar</button>
         <button class="btn btn-navy" id="btnPrint">Imprimir (PDF)</button>
       </div>
-    </div>
+    </header>
 
     <div class="alert alert-warning no-print small mb-3">
       Para remover endereço/URL do rodapé no PDF: na janela de impressão do navegador, desmarque <strong>Cabeçalhos e rodapés</strong>.

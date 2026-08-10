@@ -1,0 +1,13 @@
+{
+  "name": "projeto-gestao-alunos",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:routes": "node tools/generate-sector-redirects.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
