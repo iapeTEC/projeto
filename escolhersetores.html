@@ -1,36 +1,125 @@
-<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Projetos - Chamada</title>
-<style>
-body{font-family:Arial,sans-serif;background:#111;color:#fff;margin:0}
-.wrap{max-width:900px;margin:0 auto;padding:16px}
-a{color:#fff;text-decoration:none}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
-.card{background:#1f2937;border-radius:10px;padding:12px;border:1px solid #374151}
-.small{color:#cbd5e1}
-</style></head><body><div class="wrap">
-<h1>Projetos da Tarde – Lista de Chamada</h1>
-<p class="small">Abra a página do projeto e envie a presença. O dashboard lê a planilha de registros.</p>
-<div class="grid">
-<a class="card" href="setores/monitoria-escolar.html"><strong>Monitoria Escolar</strong></a>
-<a class="card" href="setores/residencial-feminino.html"><strong>Residencial Feminino</strong></a>
-<a class="card" href="setores/academia.html"><strong>Academia</strong></a>
-<a class="card" href="setores/capelania.html"><strong>Capelania</strong></a>
-<a class="card" href="setores/coral.html"><strong>Coral</strong></a>
-<a class="card" href="setores/trainee.html"><strong>Trainee</strong>strong></a>
-<a class="card" href="setores/enfermaria.html"><strong>Enfermaria</strong></a>
-<a class="card" href="setores/esporte.html"><strong>Esporte</strong></a>
-<a class="card" href="setores/hotelaria.html"><strong>Hotelaria</strong></a>
-<a class="card" href="setores/jardim.html"><strong>Jardim</strong></a>
-<a class="card" href="setores/lavanderia.html"><strong>Lavanderia</strong></a>
-<a class="card" href="setores/marketing.html"><strong>Marketing</strong></a>
-<a class="card" href="setores/pastoral.html"><strong>Pastoral</strong></a>
-<a class="card" href="setores/restaurante.html"><strong>Restaurante</strong></a>
-<a class="card" href="setores/secretaria.html"><strong>Secretaria</strong></a>
-<a class="card" href="setores/r-h.html"><strong>R.H.</strong></a>
-<a class="card" href="setores/contabilidade.html"><strong>Contabilidade</strong></a>
-<a class="card" href="setores/projeto.html"><strong>Projeto</strong></a>
-<a class="card" href="setores/residencial-masculino.html"><strong>Residencial Masculino</strong></a>
-</div>
-<p style="margin-top:16px"><a href="dashboard.html">Abrir dashboard</a></p>
-</div></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#3156d3">
+  <title>Projetos • Lista de chamada</title>
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="icons/site.webmanifest">
+  <link rel="stylesheet" href="assets/attendance.css">
+  <script src="assets/config2.js"></script>
+  <script src="assets/loading.js"></script>
+  <script src="assets/attendance-api.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <nav class="topnav" aria-label="Navegação principal">
+      <a class="brand" href="escolhersetores.html"><span class="brand-mark">P</span><span>Projetos</span></a>
+      <div class="nav-links">
+        <a class="nav-link is-active" href="escolhersetores.html">Chamadas</a>
+        <a class="nav-link" href="dashboard.html">Dashboard</a>
+        <a class="nav-link" href="login.html">Perfis</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Gestão de frequência</p>
+        <h1>Qual projeto você<br>quer acompanhar?</h1>
+        <p class="lead">Abra a chamada, confira os alunos e envie a presença. A lista aparece imediatamente e os responsáveis são atualizados em segundo plano.</p>
+      </div>
+      <div class="field search">
+        <label for="project-search">Localizar projeto</label>
+        <input type="search" id="project-search" placeholder="Digite para filtrar…" autocomplete="off">
+      </div>
+    </header>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Projetos disponíveis</h2>
+        <span class="muted small" id="project-count"></span>
+      </div>
+      <div class="panel-body">
+        <div id="project-grid" class="grid project-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const grid = document.getElementById('project-grid');
+      const search = document.getElementById('project-search');
+      const count = document.getElementById('project-count');
+      const status = document.getElementById('status');
+      let projects = AttendanceApi.PROJECTS.map(function (name) {
+        return { projeto: name, responsavel: '' };
+      });
+
+      function initials(name) {
+        return name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (part) {
+          return part.charAt(0).toUpperCase();
+        }).join('');
+      }
+
+      function render() {
+        const query = search.value.trim().toLocaleLowerCase('pt-BR');
+        const visible = projects.filter(function (item) {
+          return !query || item.projeto.toLocaleLowerCase('pt-BR').includes(query) ||
+            item.responsavel.toLocaleLowerCase('pt-BR').includes(query);
+        });
+        grid.textContent = '';
+        const fragment = document.createDocumentFragment();
+        visible.forEach(function (item) {
+          const card = document.createElement('a');
+          card.className = 'project-card';
+          card.href = 'chamada.html?projeto=' + encodeURIComponent(item.projeto);
+          const icon = document.createElement('span');
+          icon.className = 'project-icon';
+          icon.textContent = initials(item.projeto);
+          const copy = document.createElement('span');
+          const name = document.createElement('span');
+          name.className = 'project-name';
+          name.textContent = item.projeto;
+          const responsible = document.createElement('span');
+          responsible.className = 'project-responsible';
+          responsible.textContent = item.responsavel ? 'Responsável: ' + item.responsavel : 'Responsável a confirmar';
+          copy.append(name, responsible);
+          const go = document.createElement('span');
+          go.className = 'project-go';
+          go.textContent = 'Abrir chamada →';
+          card.append(icon, copy, go);
+          fragment.appendChild(card);
+        });
+        grid.appendChild(fragment);
+        count.textContent = visible.length + ' de ' + projects.length;
+        if (!visible.length) grid.innerHTML = '<div class="empty">Nenhum projeto encontrado.</div>';
+      }
+
+      function showWarning(message) {
+        status.textContent = message;
+        status.className = 'status is-visible error';
+      }
+
+      search.addEventListener('input', render);
+      render();
+
+      AttendanceApi.getProjects().then(function (data) {
+        const received = data.projects || data.projetos || [];
+        if (received.length) {
+          projects = received.map(function (item) {
+            return {
+              projeto: String(item.projeto || item.project || item.group || item || '').trim(),
+              responsavel: String(item.responsavel || item.responsible || '').trim()
+            };
+          }).filter(function (item) { return item.projeto; });
+          render();
+        }
+      }).catch(function () {
+        showWarning('Os projetos estão disponíveis, mas os nomes dos responsáveis não puderam ser atualizados agora.');
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#3156d3">
+  <title>Lista de chamada</title>
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="icons/site.webmanifest">
+  <link rel="stylesheet" href="assets/attendance.css">
+  <script src="assets/config2.js"></script>
+  <script src="assets/loading.js"></script>
+  <script src="assets/attendance-api.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <nav class="topnav" aria-label="Navegação principal">
+      <a class="brand" href="escolhersetores.html"><span class="brand-mark">P</span><span>Projetos</span></a>
+      <div class="nav-links">
+        <a class="nav-link is-active" href="escolhersetores.html">Chamadas</a>
+        <a class="nav-link" href="dashboard.html">Dashboard</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Frequência dos alunos</p>
+        <h1 id="project-title">Lista de chamada</h1>
+        <p class="lead">Marque as faltas, acrescente observações quando necessário e confirme o envio.</p>
+      </div>
+      <div class="summary-strip" aria-live="polite">
+        <span class="summary-chip">Responsável: <strong id="responsible">carregando…</strong></span>
+        <span class="summary-chip">Alunos: <strong id="student-total">0</strong></span>
+      </div>
+    </header>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <section class="panel">
+      <div class="panel-header toolbar">
+        <div class="field">
+          <label for="attendance-date">Data da chamada</label>
+          <input type="date" id="attendance-date">
+        </div>
+        <div class="field search">
+          <label for="student-search">Localizar aluno</label>
+          <input type="search" id="student-search" placeholder="Digite um nome…" autocomplete="off">
+        </div>
+        <button class="btn btn-quiet" id="reload" type="button">Atualizar lista</button>
+      </div>
+      <div class="panel-body">
+        <div class="toolbar no-print" style="margin-bottom:14px">
+          <button class="btn" id="all-present" type="button">Todos presentes</button>
+          <button class="btn btn-danger" id="all-absent" type="button">Marcar todos ausentes</button>
+          <span class="muted small" id="attendance-summary">0 presentes • 0 faltas</span>
+        </div>
+        <div id="student-list" class="student-list" aria-live="polite">
+          <div class="empty">Buscando os alunos deste projeto…</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="sticky-actions">
+      <span class="muted small" id="save-hint">Revise os dados antes de enviar.</span>
+      <button class="btn btn-primary" id="submit" type="button">Enviar presença</button>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const project = (params.get('projeto') || '').trim();
+      const state = { students: [], responsible: '', project };
+      const elements = {
+        title: document.getElementById('project-title'), responsible: document.getElementById('responsible'),
+        total: document.getElementById('student-total'), date: document.getElementById('attendance-date'),
+        search: document.getElementById('student-search'), list: document.getElementById('student-list'),
+        summary: document.getElementById('attendance-summary'), status: document.getElementById('status'),
+        submit: document.getElementById('submit'), reload: document.getElementById('reload'),
+        saveHint: document.getElementById('save-hint')
+      };
+
+      function todayIso() {
+        const now = new Date();
+        const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+        return local.toISOString().slice(0, 10);
+      }
+
+      function initials(name) {
+        return String(name || '').split(/\s+/).filter(Boolean).slice(0, 2)
+          .map(function (part) { return part.charAt(0).toUpperCase(); }).join('');
+      }
+
+      function photoUrls(photo) {
+        const raw = String(photo || '').trim().replace(/^\.\//, '');
+        if (!raw) return {};
+        if (/^https?:\/\//i.test(raw)) return { original: raw };
+        const clean = raw.replace(/^\.\.\//, '').replace(/^\//, '');
+        if (!/^img\/[\w\-. À-ɏ]+$/i.test(clean)) return {};
+        const file = clean.split('/').pop();
+        return {
+          optimized: 'img/optimized/' + encodeURIComponent(file.replace(/\.[^.]+$/, '')) + '.webp',
+          original: clean.split('/').map(encodeURIComponent).join('/')
+        };
+      }
+
+      function showStatus(message, type) {
+        elements.status.textContent = message;
+        elements.status.className = 'status is-visible ' + (type || 'success');
+      }
+
+      function updateSummary() {
+        const present = state.students.filter(function (student) { return student.present; }).length;
+        const absent = state.students.length - present;
+        elements.summary.textContent = present + ' presente' + (present === 1 ? '' : 's') +
+          ' • ' + absent + ' falta' + (absent === 1 ? '' : 's');
+        elements.saveHint.textContent = absent ? 'Há ' + absent + ' falta(s) marcada(s).' : 'Todos estão marcados como presentes.';
+      }
+
+      function buildStudentRow(student, index) {
+        const row = document.createElement('article');
+        row.className = 'student-row' + (student.present ? '' : ' is-absent');
+        row.dataset.name = student.name.toLocaleLowerCase('pt-BR');
+
+        const person = document.createElement('div');
+        person.className = 'student-person';
+        const urls = photoUrls(student.photo);
+        let avatar;
+        if (urls.optimized || urls.original) {
+          avatar = document.createElement('img');
+          avatar.className = 'student-avatar';
+          avatar.alt = '';
+          avatar.width = 46;
+          avatar.height = 46;
+          avatar.loading = 'lazy';
+          avatar.decoding = 'async';
+          avatar.src = urls.optimized || urls.original;
+          avatar.addEventListener('error', function onError() {
+            if (urls.original && avatar.src.indexOf(urls.original) === -1) {
+              avatar.src = urls.original;
+              return;
+            }
+            const replacement = document.createElement('span');
+            replacement.className = 'student-avatar';
+            replacement.textContent = initials(student.name);
+            avatar.replaceWith(replacement);
+          });
+        } else {
+          avatar = document.createElement('span');
+          avatar.className = 'student-avatar';
+          avatar.textContent = initials(student.name);
+        }
+        const copy = document.createElement('div');
+        copy.className = 'student-copy';
+        const name = document.createElement('div');
+        name.className = 'student-name';
+        name.textContent = student.name;
+        const status = document.createElement('div');
+        status.className = 'student-state';
+        status.textContent = student.present ? 'Presente' : 'Ausente';
+        copy.append(name, status);
+        person.append(avatar, copy);
+
+        const actions = document.createElement('div');
+        actions.className = 'student-actions';
+        const observationButton = document.createElement('button');
+        observationButton.type = 'button';
+        observationButton.className = 'btn btn-quiet';
+        observationButton.textContent = 'OBS';
+        observationButton.setAttribute('aria-expanded', 'false');
+        const presenceLabel = document.createElement('label');
+        presenceLabel.className = 'presence-control';
+        presenceLabel.title = 'Alternar presença';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = student.present;
+        checkbox.setAttribute('aria-label', 'Presença de ' + student.name);
+        const track = document.createElement('span');
+        track.className = 'presence-track';
+        presenceLabel.append(checkbox, track);
+        actions.append(observationButton, presenceLabel);
+
+        const observation = document.createElement('div');
+        observation.className = 'obs';
+        const textarea = document.createElement('textarea');
+        textarea.maxLength = 500;
+        textarea.placeholder = 'Observação sobre o aluno (opcional)';
+        textarea.value = student.observation;
+        observation.appendChild(textarea);
+
+        checkbox.addEventListener('change', function () {
+          student.present = checkbox.checked;
+          row.classList.toggle('is-absent', !student.present);
+          status.textContent = student.present ? 'Presente' : 'Ausente';
+          updateSummary();
+        });
+        observationButton.addEventListener('click', function () {
+          student.observationOpen = !student.observationOpen;
+          observation.classList.toggle('is-open', student.observationOpen);
+          observationButton.setAttribute('aria-expanded', String(student.observationOpen));
+          if (student.observationOpen) textarea.focus();
+        });
+        textarea.addEventListener('input', function () { student.observation = textarea.value; });
+        row.append(person, actions, observation);
+        return row;
+      }
+
+      function render() {
+        elements.list.textContent = '';
+        if (!state.students.length) {
+          elements.list.innerHTML = '<div class="empty">Nenhum aluno encontrado neste projeto.</div>';
+          updateSummary();
+          return;
+        }
+        const fragment = document.createDocumentFragment();
+        state.students.forEach(function (student, index) { fragment.appendChild(buildStudentRow(student, index)); });
+        elements.list.appendChild(fragment);
+        applySearch();
+        updateSummary();
+      }
+
+      function applySearch() {
+        const query = elements.search.value.trim().toLocaleLowerCase('pt-BR');
+        elements.list.querySelectorAll('.student-row').forEach(function (row) {
+          row.classList.toggle('hidden', query && !row.dataset.name.includes(query));
+        });
+      }
+
+      async function loadRoster(force) {
+        const data = await AttendanceApi.getRoster(project, { force: !!force });
+        state.responsible = String(data.responsavel || data.responsible || 'Não informado').trim();
+        state.students = (data.students || []).map(function (student) {
+          return {
+            name: String(student.nome || student.name || '').trim(),
+            photo: student.foto || student.photo || '', present: true,
+            observationOpen: false, observation: ''
+          };
+        }).filter(function (student) { return student.name; });
+        elements.responsible.textContent = state.responsible;
+        elements.total.textContent = String(state.students.length);
+        render();
+      }
+
+      async function submit() {
+        const date = elements.date.value || todayIso();
+        if (!state.students.length) return showStatus('Não há alunos para enviar.', 'error');
+        elements.status.className = 'status';
+        try {
+          const result = await Loading.run(function () {
+            return AttendanceApi.registerAttendance({
+              grupo: project, responsavel: state.responsible, data: date,
+              alunos: state.students.map(function (student) {
+                return {
+                  nome: student.name, presente: student.present ? 1 : 0,
+                  obsAtivo: student.observation.trim() ? 1 : 0,
+                  observacao: student.observation.trim()
+                };
+              })
+            });
+          }, { button: elements.submit, buttonLabel: 'Enviando…', message: 'Gravando a chamada na planilha…' });
+          showStatus('Presença salva com sucesso: ' + result.added + ' aluno(s) em ' + date + '.', 'success');
+          elements.status.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (error) {
+          showStatus(error.message || String(error), 'error');
+        }
+      }
+
+      if (!project) {
+        showStatus('Escolha um projeto antes de abrir a chamada.', 'error');
+        elements.submit.disabled = true;
+        return;
+      }
+      document.title = project + ' • Lista de chamada';
+      elements.title.textContent = project;
+      elements.date.value = todayIso();
+      elements.search.addEventListener('input', applySearch);
+      elements.submit.addEventListener('click', submit);
+      elements.reload.addEventListener('click', function () {
+        Loading.run(function () { return loadRoster(true); }, {
+          button: elements.reload, buttonLabel: 'Atualizando…', message: 'Atualizando a lista de alunos…'
+        }).catch(function (error) { showStatus(error.message || String(error), 'error'); });
+      });
+      document.getElementById('all-present').addEventListener('click', function () {
+        state.students.forEach(function (student) { student.present = true; }); render();
+      });
+      document.getElementById('all-absent').addEventListener('click', function () {
+        state.students.forEach(function (student) { student.present = false; }); render();
+      });
+
+      loadRoster(false).catch(function (error) {
+        elements.list.innerHTML = '<div class="empty">Não foi possível carregar a lista.</div>';
+        showStatus(error.message || String(error), 'error');
+      });
+    })();
+  </script>
+</body>
+</html>
