@@ -1,4 +1,4 @@
-const CACHE_NAME = 'iape-gestao-estudantil-v4';
+const CACHE_NAME = 'iape-gestao-estudantil-v5';
 const APP_SHELL = [
   './login.html',
   './index.html',

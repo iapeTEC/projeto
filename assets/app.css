@@ -664,6 +664,7 @@ body.page-soft[data-page="editor"] .ios-card>.card-header,.ios-card-header{backg
 .editor-mode-badge.is-new{background:#edf2f7;color:#65758a}.editor-mode-badge.is-editing{background:#e4f5f1;color:#087166}
 .editor-form-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;margin-top:22px;padding-top:17px;border-top:1px solid #e8edf2}
 .editor-form-hint{margin:10px 0 0;color:var(--muted);font-size:.72rem;text-align:right}
+.birth-date-help{font-size:.68rem}.birth-date-help.is-warning{color:#9a5b16;font-weight:750}
 
 .editor-content-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);align-items:start;gap:16px}
 .editor-narrow-card{max-width:780px}.catalog-actions{display:grid;gap:18px}.catalog-action+.catalog-action{padding-top:17px;border-top:1px solid #e8edf2}

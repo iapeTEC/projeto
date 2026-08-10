@@ -21,7 +21,7 @@ O sistema possui dois Apps Scripts independentes. Essa separação foi mantida p
 
 | Módulo | Configuração do frontend | Código versionado | Deploy atual |
 | --- | --- | --- | --- |
-| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | versão 9 |
+| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | versão 10 |
 | Frequência e dashboard | `assets/config2.js` | `appscript/Code.gs` | versão 6 |
 
 As duas URLs existentes foram preservadas durante a atualização. O código foi publicado sobre as implantações atuais, evitando quebrar favoritos ou links já distribuídos.
@@ -56,6 +56,8 @@ As telas continuam sujeitas ao tempo de inicialização a frio do Apps Script, m
 - A gestão acadêmica caiu de quatro solicitações iniciais para uma.
 - A edição usa uma lista mestre de alunos já carregada: selecionar um nome preenche o formulário imediatamente, sem uma segunda solicitação.
 - O identificador interno do aluno nunca precisa ser digitado ou carregado manualmente.
+- A edição envia somente os campos modificados e preserva data de nascimento, idade, observações e demais dados não alterados.
+- Datas vindas das planilhas são normalizadas antes de chegar aos campos do navegador.
 - O perfil individual recebe dados e competências em uma única solicitação.
 - Setores, bolsas, competências e configurações usam cache no servidor com invalidação após escrita.
 - O navegador evita chamadas duplicadas em andamento e reutiliza leituras recentes durante a sessão.

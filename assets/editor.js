@@ -30,6 +30,40 @@
     return local.toISOString().slice(0, 10);
   }
 
+  function normalizeIsoDate(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:\D|$)/);
+    if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+    const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (br) return br[3] + '-' + br[2] + '-' + br[1];
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return '';
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+  }
+
+  function formatBirthDate(iso) {
+    const parts = String(iso || '').split('-');
+    return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : '';
+  }
+
+  function setBirthDateHelp(rawValue, normalizedValue) {
+    const help = byId('st_birth_help');
+    if (rawValue && normalizedValue) {
+      help.textContent = 'Data cadastrada: ' + formatBirthDate(normalizedValue) + '. Só será alterada se você modificar este campo.';
+      help.className = 'form-text birth-date-help';
+    } else if (rawValue) {
+      help.textContent = 'A data cadastrada não pôde ser exibida, mas será preservada ao salvar outros campos.';
+      help.className = 'form-text birth-date-help is-warning';
+    } else {
+      help.textContent = 'Nenhuma data de nascimento está cadastrada para este aluno.';
+      help.className = 'form-text birth-date-help';
+    }
+  }
+
   function findStudent(studentId) {
     return state.students.find(function (student) {
       return String(student.student_id || '') === String(studentId || '');
@@ -184,6 +218,8 @@
     byId('st_status').value = 'ACTIVE';
     byId('st_sector').value = '';
     byId('st_type').value = '';
+    byId('st_birth_help').textContent = 'Informe a data de nascimento se ela estiver disponível.';
+    byId('st_birth_help').className = 'form-text birth-date-help';
     setStudentFormMode(null);
     renderStudentList();
     if (focusName) byId('st_name').focus();
@@ -200,7 +236,9 @@
     byId('st_id').value = student.student_id || '';
     byId('st_name').value = student.name || '';
     byId('st_sex').value = student.sex || '';
-    byId('st_birth').value = String(student.birth_date || '').slice(0, 10);
+    const birthDate = normalizeIsoDate(student.birth_date);
+    byId('st_birth').value = birthDate;
+    setBirthDateHelp(student.birth_date, birthDate);
     byId('st_phone').value = student.phone_display || student.phone_e164 || '';
     byId('st_sector').value = student.sector_current_id || '';
     byId('st_type').value = student.scholarship_type_id || '';
@@ -318,6 +356,20 @@
     button.addEventListener('click', function () { showPanel(button.dataset.editorTab); });
   });
   byId('studentEditorSearch').addEventListener('input', renderStudentList);
+  byId('st_birth').addEventListener('change', function () {
+    const student = findStudent(state.selectedStudentId);
+    const original = normalizeIsoDate(student && student.birth_date);
+    const current = byId('st_birth').value;
+    if (original && !current) {
+      byId('st_birth_help').textContent = 'Atenção: salvar assim removerá a data cadastrada. O sistema pedirá confirmação.';
+      byId('st_birth_help').className = 'form-text birth-date-help is-warning';
+    } else if (current && current !== original) {
+      byId('st_birth_help').textContent = 'Nova data: ' + formatBirthDate(current) + '. A idade será recalculada ao salvar.';
+      byId('st_birth_help').className = 'form-text birth-date-help is-warning';
+    } else {
+      setBirthDateHelp(student && student.birth_date, original);
+    }
+  });
   byId('btnNewStudent').addEventListener('click', function () { resetStudentForm(true); });
   byId('btnNewStudentTop').addEventListener('click', function () {
     showPanel('students');
@@ -331,6 +383,75 @@
     showPanel('evaluations');
   });
 
+  function studentFormValues() {
+    const sectorId = byId('st_sector').value;
+    const typeId = byId('st_type').value;
+    return {
+      name: byId('st_name').value.trim(),
+      sex: byId('st_sex').value,
+      birth_date: byId('st_birth').value,
+      phone: byId('st_phone').value.trim(),
+      photo_url: byId('st_photo').value.trim(),
+      sector_current_id: sectorId,
+      sector_current_name: findName(state.sectors, 'sector_id', 'name', sectorId),
+      scholarship_type_id: typeId,
+      scholarship_type_name: findName(state.types, 'type_id', 'name', typeId),
+      workload_minutes: byId('st_work').value.trim(),
+      status: byId('st_status').value
+    };
+  }
+
+  function storedStudentValues(student) {
+    return {
+      name: String(student.name || '').trim(),
+      sex: String(student.sex || ''),
+      birth_date: normalizeIsoDate(student.birth_date),
+      phone: String(student.phone_display || student.phone_e164 || '').trim(),
+      photo_url: String(student.photo_url || '').trim(),
+      sector_current_id: String(student.sector_current_id || ''),
+      sector_current_name: String(student.sector_current_name || ''),
+      scholarship_type_id: String(student.scholarship_type_id || ''),
+      scholarship_type_name: String(student.scholarship_type_name || ''),
+      workload_minutes: String(student.workload_minutes || '').trim(),
+      status: String(student.status || 'ACTIVE')
+    };
+  }
+
+  function buildStudentRequest() {
+    const studentId = byId('st_id').value.trim();
+    const current = studentFormValues();
+    if (!studentId) return { student: Object.assign({ student_id: '' }, current), changed: true };
+
+    const originalStudent = findStudent(studentId);
+    if (!originalStudent) throw new Error('O cadastro original não está mais carregado. Atualize os dados e tente novamente.');
+    const original = storedStudentValues(originalStudent);
+    const patch = { student_id: studentId };
+    const updateMask = [];
+
+    ['name', 'sex', 'birth_date', 'phone', 'photo_url', 'workload_minutes', 'status'].forEach(function (field) {
+      if (String(current[field] || '') === String(original[field] || '')) return;
+      patch[field] = current[field];
+      updateMask.push(field);
+    });
+
+    if (current.sector_current_id !== original.sector_current_id) {
+      patch.sector_current_id = current.sector_current_id;
+      patch.sector_current_name = current.sector_current_name;
+      updateMask.push('sector_current_id', 'sector_current_name');
+    }
+    if (current.scholarship_type_id !== original.scholarship_type_id) {
+      patch.scholarship_type_id = current.scholarship_type_id;
+      patch.scholarship_type_name = current.scholarship_type_name;
+      updateMask.push('scholarship_type_id', 'scholarship_type_name');
+    }
+    if (updateMask.indexOf('birth_date') !== -1 && !current.birth_date && original.birth_date) {
+      patch.clear_birth_date = true;
+    }
+
+    patch.update_mask = updateMask;
+    return { student: patch, changed: updateMask.length > 0 };
+  }
+
   byId('studentForm').addEventListener('submit', async function (event) {
     event.preventDefault();
     const name = byId('st_name').value.trim();
@@ -340,26 +461,16 @@
       return;
     }
 
-    const sectorId = byId('st_sector').value;
-    const typeId = byId('st_type').value;
-    const payload = {
-      student: {
-        student_id: byId('st_id').value.trim(),
-        name: name,
-        sex: byId('st_sex').value,
-        birth_date: byId('st_birth').value,
-        phone: byId('st_phone').value.trim(),
-        photo_url: byId('st_photo').value.trim(),
-        sector_current_id: sectorId,
-        sector_current_name: findName(state.sectors, 'sector_id', 'name', sectorId),
-        scholarship_type_id: typeId,
-        scholarship_type_name: findName(state.types, 'type_id', 'name', typeId),
-        workload_minutes: byId('st_work').value.trim(),
-        status: byId('st_status').value
-      }
-    };
-
     try {
+      const prepared = buildStudentRequest();
+      const payload = { student: prepared.student };
+      if (!prepared.changed) {
+        window.UI.toast('Nenhuma alteração foi feita neste cadastro.', 'ok');
+        return;
+      }
+      if (payload.student.clear_birth_date && !window.confirm('Remover a data de nascimento deste aluno? A idade também será removida.')) {
+        return;
+      }
       let savedId = payload.student.student_id;
       await runWithButton(byId('btnSaveStudent'), 'Salvando…', 'Atualizando o cadastro do aluno…', async function () {
         const result = await window.Api.apiPost('upsertStudent', payload);
