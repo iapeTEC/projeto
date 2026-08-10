@@ -32,7 +32,7 @@
  * - Rodar setupScholarshipSystem() do Code.gs antes.
  */
 
-const PROFILE_API_VERSION = "2.1.0";
+const PROFILE_API_VERSION = "2.2.0";
 const PROFILE_CACHE_PREFIX = "profile-api:v2:";
 const PROFILE_CACHEABLE_SHEETS = Object.freeze({
   SECTORS: 600,
@@ -341,7 +341,7 @@ function _getStudentDirectory_(req, ctx) {
 
 function _getEditorBootstrap_(req, ctx) {
   _requireRole_(ctx, ["EDITOR"]);
-  const students = _listStudents_({ filters: { status: "ACTIVE" } }, ctx);
+  const students = _listStudents_({ filters: {} }, ctx);
   return {
     ok: true,
     students: students.students,

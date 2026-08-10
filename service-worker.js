@@ -1,8 +1,18 @@
-const CACHE_NAME = 'iape-gestao-estudantil-v3';
+const CACHE_NAME = 'iape-gestao-estudantil-v4';
 const APP_SHELL = [
+  './login.html',
+  './index.html',
+  './students.html',
+  './student.html',
+  './editor.html',
   './escolhersetores.html',
   './chamada.html',
   './dashboard.html',
+  './assets/app.css',
+  './assets/api.js',
+  './assets/editor.js',
+  './assets/students.js',
+  './assets/ui.js',
   './assets/attendance.css',
   './assets/attendance-api.js',
   './assets/loading.js',

@@ -4,6 +4,7 @@ import { dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import vm from 'node:vm';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -22,6 +23,41 @@ test('todos os JavaScripts versionados têm sintaxe válida', async () => {
     const result = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
     assert.equal(result.status, 0, `${file}\n${result.stderr}`);
   }
+});
+
+test('scripts inline das páginas têm sintaxe válida', async () => {
+  const htmlFiles = await filesIn('.', '.html');
+  for (const file of htmlFiles) {
+    const html = await readFile(file, 'utf8');
+    const inlineScripts = Array.from(html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi));
+    for (const match of inlineScripts) {
+      assert.doesNotThrow(() => new vm.Script(match[1], { filename: file }), file);
+    }
+  }
+});
+
+test('editor seleciona alunos sem expor ID ou usar modais aninhados', async () => {
+  const html = await readFile(resolve(root, 'editor.html'), 'utf8');
+  const script = await readFile(resolve(root, 'assets/editor.js'), 'utf8');
+  assert.match(html, /id="studentEditorList"/);
+  assert.match(html, /type="hidden" id="st_id"/);
+  assert.match(html, /assets\/editor\.js/);
+  assert.doesNotMatch(html, /studentPickerModal|cardModal|btnOpenStudentPicker/);
+  assert.match(script, /function selectStudent\(/);
+  assert.match(script, /findStudent\(studentId\)/);
+});
+
+test('diretório oferece busca de alunos instantânea fora dos filtros', async () => {
+  const html = await readFile(resolve(root, 'students.html'), 'utf8');
+  const script = await readFile(resolve(root, 'assets/students.js'), 'utf8');
+  const searchIndex = html.indexOf('id="studentSearchPanel"');
+  const inputIndex = html.indexOf('id="f_q"');
+  const filtersIndex = html.indexOf('id="filters"');
+  assert.ok(searchIndex >= 0 && inputIndex > searchIndex && filtersIndex > inputIndex);
+  assert.match(html, /id="studentSuggestions"/);
+  assert.match(script, /byId\('f_q'\)\.addEventListener\('input', renderDirectory\)/);
+  assert.match(script, /function renderSuggestions\(/);
+  assert.match(script, /filters: \{\}, include_meta: 'TRUE'/);
 });
 
 test('solicitações exibem barra, spinner, mensagem e estado ocupado', async () => {
