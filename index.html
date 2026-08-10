@@ -3,7 +3,7 @@
 <head>
  <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="dns-prefetch" href="//script.google.com">
-<title>Início • Bolsistas</title>
+<title>Visão geral • IAPE Gestão Estudantil</title>
 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -22,71 +22,65 @@
 </head>
 <body class="page-soft">
 <div id="appNav"></div>
-<div class="container py-3">
+<div class="container app-page">
   <div id="toastArea"></div>
 
-  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
-    <div>
-      <h1 class="h4 mb-1" style="color:var(--navy); font-weight:800;">Painel</h1>
-      <div class="small-muted">Relatórios gerais e acesso aos perfis individuais.</div>
+  <section class="home-hero">
+    <div class="home-hero-copy">
+      <p class="page-eyebrow">Central acadêmica</p>
+      <h1 class="page-title" id="welcomeTitle">Visão geral dos alunos</h1>
+      <p class="page-description">Acompanhe os principais indicadores e acesse rapidamente as rotinas de gestão estudantil.</p>
     </div>
-    <div class="no-print">
-      <a class="btn btn-navy" href="students.html">Abrir lista de alunos</a>
+    <div class="home-hero-actions no-print">
+      <a class="btn btn-light-academic" href="students.html">Consultar alunos</a>
+      <a class="btn btn-glass" href="escolhersetores.html">Registrar frequência</a>
     </div>
-  </div>
+  </section>
 
   <div class="row g-3">
     <div class="col-12 col-md-4">
-      <div class="kpi">
-        <div class="label">Total de alunos (ativos)</div>
+      <div class="academic-kpi">
+        <span class="academic-kpi-icon" aria-hidden="true">A</span>
+        <div class="label">Alunos ativos</div>
         <div class="value" id="kpiStudents">—</div>
+        <div class="support">Cadastros em acompanhamento</div>
       </div>
     </div>
     <div class="col-12 col-md-4">
-      <div class="kpi">
-        <div class="label">Setores cadastrados</div>
+      <div class="academic-kpi">
+        <span class="academic-kpi-icon" aria-hidden="true">S</span>
+        <div class="label">Setores</div>
         <div class="value" id="kpiSectors">—</div>
+        <div class="support">Áreas de atuação cadastradas</div>
       </div>
     </div>
     <div class="col-12 col-md-4">
-      <div class="kpi">
-        <div class="label">Tipos de bolsa</div>
+      <div class="academic-kpi">
+        <span class="academic-kpi-icon" aria-hidden="true">B</span>
+        <div class="label">Modalidades de bolsa</div>
         <div class="value" id="kpiTypes">—</div>
+        <div class="support">Programas de apoio estudantil</div>
       </div>
     </div>
   </div>
 
-  <div class="row g-3 mt-1">
-    <div class="col-12 col-lg-6">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <strong>Ações</strong>
-          <span class="badge badge-navy" id="roleBadge">—</span>
-        </div>
-        <div class="card-body">
-          <div class="d-grid gap-2">
-            <a class="btn btn-outline-primary" href="students.html">Relatórios / Lista + WhatsApp</a>
-            <a class="btn btn-outline-primary" href="students.html#filters">Filtrar por setor/bolsa/sexo/idade</a>
-            <a class="btn btn-outline-primary" href="escolhersetores.html">Abrir listas de chamada</a>
-            <a class="btn btn-outline-secondary" href="student.html">Abrir perfil (precisa de student_id)</a>
-            <a class="btn btn-navy" href="editor.html" id="btnEditor" style="display:none;">Painel do Editor</a>
-          </div>
-          <div class="small text-muted mt-3">
-            Dica: para imprimir um relatório individual, entre no perfil do aluno e use o botão Imprimir (Ctrl+P).
-          </div>
-        </div>
-      </div>
-    </div>
+  <div class="section-heading"><h2>Acessos rápidos</h2><span class="badge badge-navy" id="roleBadge">—</span></div>
+  <div class="quick-grid">
+    <a class="quick-action" href="students.html">
+      <span class="quick-action-icon" aria-hidden="true">01</span><span><strong>Diretório de alunos</strong><small>Consulte perfis, contatos, setor e modalidade de bolsa.</small></span>
+    </a>
+    <a class="quick-action" href="escolhersetores.html">
+      <span class="quick-action-icon" aria-hidden="true">02</span><span><strong>Frequência dos projetos</strong><small>Registre presenças, faltas e observações por projeto.</small></span>
+    </a>
+    <a class="quick-action" href="editor.html" id="btnEditor" style="display:none;">
+      <span class="quick-action-icon" aria-hidden="true">03</span><span><strong>Gestão acadêmica</strong><small>Cadastre alunos, avaliações, setores e usuários.</small></span>
+    </a>
+  </div>
 
-    <div class="col-12 col-lg-6">
-      <div class="card">
-        <div class="card-header"><strong>Status do sistema</strong></div>
-        <div class="card-body">
-          <div class="small-muted mb-2">Conectividade com Apps Script:</div>
-          <pre class="p-3 bg-light border rounded" id="sysBox" style="white-space:pre-wrap;">Testando...</pre>
-        </div>
-      </div>
-    </div>
+  <div class="section-heading"><h2>Disponibilidade</h2><span id="lastCheck">Verificando agora</span></div>
+  <div class="system-state" id="systemState" role="status">
+    <span class="system-state-dot" aria-hidden="true"></span>
+    <span><strong id="systemTitle">Conectando aos serviços acadêmicos…</strong><small id="systemDetail">Aguarde a confirmação do Apps Script.</small></span>
   </div>
 
 </div>
@@ -96,26 +90,29 @@
   const user = window.UI.requireAuth();
   if(!user) return;
   window.UI.mountNav("home");
-  document.getElementById("roleBadge").textContent = user.role;
+  document.getElementById("roleBadge").textContent = user.role === "EDITOR" ? "Administrador" : "Consulta";
+  document.getElementById("welcomeTitle").textContent = "Olá, " + user.login + ".";
 
   if(user.role === "EDITOR"){
-    document.getElementById("btnEditor").style.display = "block";
+    document.getElementById("btnEditor").style.display = "flex";
   }
 
-  const results = await window.Loading.run(()=>Promise.allSettled([
-    fetch(window.APP_CONFIG.API_URL + "?action=ping", { redirect:"follow" }).then(r=>r.text()),
-    window.Api.apiPost("listStudents", { filters: { status: "ACTIVE" } }),
-    window.Api.apiPost("listSectors", {}),
-    window.Api.apiPost("listScholarshipTypes", {})
-  ]), { message:"Montando seu painel…" });
-
-  const [ping, students, sectors, types] = results;
-  document.getElementById("sysBox").textContent = ping.status === "fulfilled"
-    ? ping.value
-    : "Falha ao testar a conexão: " + (ping.reason?.message || String(ping.reason));
-  document.getElementById("kpiStudents").textContent = students.status === "fulfilled" ? String(students.value.count || 0) : "—";
-  document.getElementById("kpiSectors").textContent = sectors.status === "fulfilled" ? String(sectors.value.count || 0) : "—";
-  document.getElementById("kpiTypes").textContent = types.status === "fulfilled" ? String(types.value.count || 0) : "—";
+  try{
+    const data = await window.Api.apiPost("getHomeOverview", {});
+    const metrics = data.metrics || {};
+    document.getElementById("kpiStudents").textContent = String(metrics.active_students || 0);
+    document.getElementById("kpiSectors").textContent = String(metrics.sectors || 0);
+    document.getElementById("kpiTypes").textContent = String(metrics.scholarship_types || 0);
+    document.getElementById("systemTitle").textContent = "Todos os serviços estão operacionais";
+    document.getElementById("systemDetail").textContent = "API de perfis conectada • versão " + (data.version || "atual");
+    document.getElementById("lastCheck").textContent = "Atualizado às " + new Date().toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"});
+  }catch(error){
+    document.getElementById("systemState").style.borderColor = "#f0c8cc";
+    document.getElementById("systemState").style.background = "#fff5f5";
+    document.getElementById("systemTitle").textContent = "Serviço temporariamente indisponível";
+    document.getElementById("systemDetail").textContent = error.message || String(error);
+    window.UI.toast(error.message || String(error), "err");
+  }
 })();
 </script>
 

@@ -1,7 +1,7 @@
 /**
  * API de frequencia dos projetos.
  *
- * Configuracao obrigatoria em Project Settings > Script Properties:
+ * Configuracao recomendada em Project Settings > Script Properties:
  * - ATTENDANCE_SPREADSHEET_ID
  * - SOURCE_ROSTER_SPREADSHEET_ID
  *
@@ -9,7 +9,7 @@
  * - ADMIN_TOKEN (protege a execucao manual da presenca automatica via HTTP)
  */
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const DEFAULT_TZ = 'America/Recife';
 
 const SOURCE_ROSTER_SHEET_NAME = 'STUDENTS';

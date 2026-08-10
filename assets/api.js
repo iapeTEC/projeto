@@ -5,6 +5,10 @@
     listScholarshipTypes: 10 * 60 * 1000,
     listCompetencies: 10 * 60 * 1000,
     listStudents: 60 * 1000,
+    getHomeOverview: 60 * 1000,
+    getStudentDirectory: 60 * 1000,
+    getEditorBootstrap: 60 * 1000,
+    getStudentProfile: 45 * 1000,
     getStudentReport: 45 * 1000,
     getSponsorReport: 45 * 1000
   });
@@ -95,6 +99,8 @@
       listSectors: 'Carregando setores…', listScholarshipTypes: 'Carregando bolsas…',
       listCompetencies: 'Carregando competências…', getStudentReport: 'Montando o perfil…',
       getSponsorReport: 'Montando o relatório…', upsertStudent: 'Salvando aluno…',
+      getHomeOverview: 'Montando a visão acadêmica…', getStudentDirectory: 'Organizando o diretório de alunos…',
+      getEditorBootstrap: 'Preparando a gestão acadêmica…', getStudentProfile: 'Montando o perfil acadêmico…',
       createEvaluation: 'Salvando avaliação…', setStudentSector: 'Atualizando setor…'
     };
     return labels[action] || 'Processando solicitação…';

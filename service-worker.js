@@ -1,4 +1,4 @@
-const CACHE_NAME = 'projetos-app-v2';
+const CACHE_NAME = 'iape-gestao-estudantil-v3';
 const APP_SHELL = [
   './escolhersetores.html',
   './chamada.html',

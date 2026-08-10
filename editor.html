@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<title>Projeto</title>
+<title>Gestão acadêmica • IAPE</title>
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="dns-prefetch" href="//script.google.com">
 
@@ -26,18 +26,19 @@
 <body class="page-soft" data-page="editor">
 <div id="appNav"></div>
 
-<div class="container py-3">
+<div class="container app-page">
   <div id="toastArea"></div>
 
-  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-2">
+  <header class="page-heading">
     <div>
-      <h1 class="h4 mb-1" style="color:var(--navy); font-weight:800;">Editor</h1>
-      <div class="small-muted">Toque em um bloco para abrir e editar no modo focado.</div>
+      <p class="page-eyebrow">Administração</p>
+      <h1 class="page-title">Gestão acadêmica</h1>
+      <p class="page-description">Cadastre alunos, avaliações, setores e acessos em um fluxo organizado.</p>
     </div>
-    <div class="no-print d-flex gap-2">
+    <div class="page-actions no-print">
       <button class="btn btn-outline-secondary" id="btnRefresh">Atualizar listas</button>
     </div>
-  </div>
+  </header>
 
   <!-- TILES (mobile-first) -->
   <div class="tile-grid mb-3">
@@ -473,19 +474,14 @@ el("ev_date").value = todayISO();
     });
   }
 
-  async function refreshAll(){
-    const [s, sec, t, c] = await Promise.all([
-      window.Api.apiPost("listStudents", { filters: { status:"ACTIVE" } }),
-      window.Api.apiPost("listSectors", {}),
-      window.Api.apiPost("listScholarshipTypes", {}),
-      window.Api.apiPost("listCompetencies", {})
-    ]);
+  async function refreshAll(force){
+    const data = await window.Api.apiPost("getEditorBootstrap", {}, { noCache: !!force });
 
-    cache.students = s.students || [];
-    cache.sectors = sec.sectors || [];
-    cache.types = t.scholarship_types || [];
-    cache.comps = c.competencies || [];
-    compsForEval = (c.competencies || []);
+    cache.students = data.students || [];
+    cache.sectors = data.sectors || [];
+    cache.types = data.scholarship_types || [];
+    cache.comps = data.competencies || [];
+    compsForEval = data.competencies || [];
 
     fillSelect(el("st_sector"), cache.sectors, "sector_id", "name", "—");
     fillSelect(el("qs_sector"), cache.sectors, "sector_id", "name", "—");
@@ -533,7 +529,7 @@ el("ev_date").value = todayISO();
       const res = await window.Api.apiPost("upsertStudent", payload);
       if(!el("st_id").value.trim()) el("st_id").value = res.student_id;
       window.UI.toast("Aluno salvo.", "ok");
-      await refreshAll();
+      await refreshAll(true);
       clearStudentForm_();
 // ===== Picker: carregar aluno para editar (busca + lista filtrável) =====
   const pickModalEl = document.getElementById("studentPickerModal");
@@ -720,7 +716,7 @@ el("ev_date").value = todayISO();
 
   el("btnRefresh").addEventListener("click", async ()=>{
     try{
-      await refreshAll();
+      await refreshAll(true);
       window.UI.toast("Listas atualizadas.", "ok");
     }catch(e){ window.UI.toast(e.message || String(e), "err"); }
   });

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<title>Alunos • Bolsistas</title>
+<title>Alunos • IAPE Gestão Estudantil</title>
    <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="dns-prefetch" href="//script.google.com">
 
@@ -20,24 +20,25 @@
 <script src="assets/ui.js"></script>
 
 </head>
-<body>
+<body class="page-soft">
 <div id="appNav"></div>
-<div class="container py-3">
+<div class="container app-page">
   <div id="toastArea"></div>
 
-  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-2">
+  <header class="page-heading">
     <div>
-      <h1 class="h4 mb-1" style="color:var(--navy); font-weight:800;">Alunos</h1>
-      <div class="small-muted">Filtros e lista com botão WhatsApp. Clique no nome para abrir o perfil.</div>
+      <p class="page-eyebrow">Diretório acadêmico</p>
+      <h1 class="page-title">Alunos</h1>
+      <p class="page-description">Consulte dados acadêmicos, setor, bolsa e canais de contato em uma única visão.</p>
     </div>
-    <div class="no-print d-flex gap-2">
+    <div class="page-actions no-print">
       <button class="btn btn-outline-secondary" id="btnReset">Limpar filtros</button>
       <button class="btn btn-navy" id="btnReload">Atualizar</button>
     </div>
-  </div>
+  </header>
 
   <div class="card mb-3" id="filters">
-    <div class="card-header"><strong>Filtros</strong></div>
+    <div class="card-header d-flex justify-content-between align-items-center"><strong>Busca e filtros</strong><span class="small-muted">Refine o diretório</span></div>
     <div class="card-body">
       <div class="row g-2">
         <div class="col-12 col-md-4">
@@ -90,7 +91,7 @@
 
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <strong>Lista</strong>
+      <strong>Diretório de alunos</strong>
       <span class="badge badge-navy" id="countBadge">—</span>
     </div>
     <div class="card-body">
@@ -137,33 +138,48 @@
     return f;
   }
 
-  async function loadMeta(){
-    const [secResult, typeResult] = await Promise.allSettled([
-      window.Api.apiPost("listSectors", {}),
-      window.Api.apiPost("listScholarshipTypes", {})
-    ]);
+  let metaLoaded = false;
 
-    if(secResult.status === "fulfilled"){
-      const sec = secResult.value;
+  function mountMeta(data){
+    if(metaLoaded) return;
+    const sectors = data.sectors || [];
+    const scholarshipTypes = data.scholarship_types || [];
+    if(sectors.length){
       const sel = el("f_sector");
-      sec.sectors.forEach(s=>{
+      sectors.forEach(s=>{
         const opt = document.createElement("option");
         opt.value = s.sector_id;
         opt.textContent = s.name;
         sel.appendChild(opt);
       });
     }
-
-    if(typeResult.status === "fulfilled"){
-      const t = typeResult.value;
+    if(scholarshipTypes.length){
       const sel = el("f_type");
-      t.scholarship_types.forEach(x=>{
+      scholarshipTypes.forEach(x=>{
         const opt = document.createElement("option");
         opt.value = x.type_id;
         opt.textContent = x.name;
         sel.appendChild(opt);
       });
     }
+    metaLoaded = true;
+  }
+
+  function initials(name){
+    return String(name || "").split(/\s+/).filter(Boolean).slice(0,2).map(part=>part.charAt(0).toUpperCase()).join("") || "A";
+  }
+
+  function avatarHtml(s){
+    const name = window.Api.esc(initials(s.name));
+    const raw = String(s.photo_url || "").trim();
+    if(!/^(?:https?:\/\/|img\/)/i.test(raw)) return `<span class="student-list-avatar">${name}</span>`;
+    return `<span class="student-list-avatar"><img src="${window.Api.esc(raw)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></span>`;
+  }
+
+  function whatsappButton(value){
+    const url = String(value || "").trim();
+    if(!/^https:\/\/wa\.me\/\d+$/i.test(url)) return `<span class="text-muted small">—</span>`;
+    return `<a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="${window.Api.esc(url)}">WhatsApp</a>`;
   }
 
   function rowHtml(s){
@@ -174,12 +190,12 @@
     const age = s.age || "";
     const href = "student.html?student_id=" + encodeURIComponent(s.student_id);
 
-    const btn = wa ? `<a class="btn btn-sm btn-outline-success" target="_blank" href="${wa}">WhatsApp</a>` : `<span class="text-muted small">—</span>`;
+    const btn = whatsappButton(wa);
 
     return `<tr>
       <td>
-        <div class="fw-semibold"><a href="${href}">${window.Api.esc(s.name)}</a></div>
-        <div class="small text-muted">${window.Api.esc(s.student_id)}</div>
+        <div class="d-flex align-items-center gap-2">${avatarHtml(s)}<div><div class="fw-semibold"><a href="${href}">${window.Api.esc(s.name)}</a></div>
+        <div class="small text-muted">Registro ${window.Api.esc(s.student_id)}</div></div></div>
       </td>
       <td>${window.Api.esc(sector)}</td>
       <td>${window.Api.esc(type)}</td>
@@ -197,16 +213,16 @@
     const age = s.age || "";
     const href = "student.html?student_id=" + encodeURIComponent(s.student_id);
 
-    const btn = wa ? `<a class="btn btn-sm btn-outline-success" target="_blank" href="${wa}">WhatsApp</a>` : "";
+    const btn = whatsappButton(wa);
 
     return `<div class="card mb-2">
       <div class="card-body">
         <div class="d-flex justify-content-between gap-2">
-          <div>
+          <div class="d-flex gap-2">${avatarHtml(s)}<div>
             <div class="fw-semibold"><a href="${href}">${window.Api.esc(s.name)}</a></div>
             <div class="small text-muted">${window.Api.esc(sector)} • ${window.Api.esc(type)}</div>
             <div class="small text-muted">Idade: ${window.Api.esc(age)} • Tel: ${window.Api.esc(phone)}</div>
-          </div>
+          </div></div>
           <div class="text-end">
             ${btn}
           </div>
@@ -215,18 +231,21 @@
     </div>`;
   }
 
-  async function loadStudents(){
+  async function loadStudents(noCache){
     el("tblBody").innerHTML = "";
     el("cardsList").innerHTML = "";
     el("countBadge").textContent = "Carregando...";
 
     try{
-      const data = await window.Api.apiPost("listStudents", { filters: getFilters() });
+      const data = await window.Api.apiPost("getStudentDirectory", {
+        filters: getFilters(), include_meta: metaLoaded ? "FALSE" : "TRUE"
+      }, { noCache: !!noCache });
+      mountMeta(data);
       el("countBadge").textContent = String(data.count || 0);
 
       const rows = data.students || [];
-      el("tblBody").innerHTML = rows.map(rowHtml).join("");
-      el("cardsList").innerHTML = rows.map(cardHtml).join("");
+      el("tblBody").innerHTML = rows.length ? rows.map(rowHtml).join("") : `<tr><td colspan="6" class="empty-table">Nenhum aluno encontrado com estes filtros.</td></tr>`;
+      el("cardsList").innerHTML = rows.length ? rows.map(cardHtml).join("") : `<div class="empty-table">Nenhum aluno encontrado com estes filtros.</div>`;
     }catch(e){
       window.UI.toast(e.message || String(e), "err");
       el("countBadge").textContent = "—";
@@ -243,8 +262,8 @@
     el("f_age_max").value = "";
   }
 
-  function loadWithFeedback(button){
-    return window.Loading.run(loadStudents, {
+  function loadWithFeedback(button, noCache){
+    return window.Loading.run(()=>loadStudents(noCache), {
       button,
       buttonLabel:"Buscando…",
       message:"Atualizando a lista de alunos…"
@@ -252,7 +271,7 @@
   }
 
   el("btnApply").addEventListener("click", ()=>loadWithFeedback(el("btnApply")));
-  el("btnReload").addEventListener("click", ()=>loadWithFeedback(el("btnReload")));
+  el("btnReload").addEventListener("click", ()=>loadWithFeedback(el("btnReload"), true));
   el("btnReset").addEventListener("click", ()=>{ resetFilters(); loadWithFeedback(el("btnReset")); });
 
   // Enter para aplicar
@@ -261,7 +280,7 @@
   });
 
   (async function init(){
-    await Promise.all([loadMeta(), loadStudents()]);
+    await loadStudents();
   })();
 })();
 </script>

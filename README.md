@@ -1,115 +1,146 @@
-# Projetos • Gestão de Alunos
+# IAPE • Gestão Estudantil
 
-Plataforma web para acompanhar alunos, seus perfis, avaliações e a frequência nos projetos vespertinos. O frontend é publicado pelo GitHub Pages e usa Google Apps Script + Google Planilhas como backend.
+Plataforma acadêmica para acompanhar alunos, bolsas, setores, avaliações, projetos e frequência. O frontend é publicado pelo GitHub Pages e os dados são atendidos por Google Apps Script + Google Planilhas.
 
 **Aplicação:** [iapetec.github.io/projeto](https://iapetec.github.io/projeto/)
 
-## O que existe no sistema
+## Recursos
 
-- Área autenticada de perfis, filtros, relatórios e avaliações de alunos.
-- Lista de chamada única para todos os projetos, com presença, falta e observação.
-- Dashboard por período e projeto, com indicadores e relatório de faltas para impressão.
-- Interface responsiva, instalável como PWA e com cache de arquivos estáticos.
-- Indicadores visuais em todas as solicitações: barra de progresso, spinner, mensagem da etapa e botões bloqueados durante o envio.
+- Autenticação com perfis de administrador e consulta.
+- Diretório de alunos com filtros, contato e perfil individual.
+- Avaliações formativas, histórico de evolução e relatórios para impressão.
+- Gestão de setores, bolsas, competências e usuários.
+- Lista de chamada com presença, falta e observação.
+- Dashboard de frequência por período e projeto.
+- Interface responsiva e instalável como PWA.
+- Barra de progresso, spinner, mensagem da operação e bloqueio do botão durante todas as solicitações.
 
-## Arquitetura importante
+## Arquitetura
 
-Este repositório usa **dois deploys diferentes do Apps Script**:
+O sistema possui dois Apps Scripts independentes. Essa separação foi mantida porque cada módulo tem dados, permissões e responsabilidades diferentes.
 
-| Módulo | Configuração do frontend | Backend no repositório |
-| --- | --- | --- |
-| Perfis, login e avaliações | `assets/config.js` | Ainda não está versionado |
-| Frequência e dashboard | `assets/config2.js` | `appscript/Code.gs` |
+| Módulo | Configuração do frontend | Código versionado | Deploy atual |
+| --- | --- | --- | --- |
+| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | versão 8 |
+| Frequência e dashboard | `assets/config2.js` | `appscript/Code.gs` | versão 6 |
 
-O `Code.gs` fornecido originalmente corresponde ao segundo módulo. A URL de `config.js` é diferente, portanto existe outro projeto Apps Script para a área de perfis. Faça uma cópia dos demais arquivos `.gs` desse projeto e adicione-os ao repositório antes de alterar seu backend. Dentro de um mesmo projeto Apps Script, todos os arquivos `.gs` funcionam em conjunto; deve existir apenas uma implementação ativa de cada `doGet` e `doPost`.
+As duas URLs existentes foram preservadas durante a atualização. O código foi publicado sobre as implantações atuais, evitando quebrar favoritos ou links já distribuídos.
 
 ```text
 projeto/
-├── appscript/              # backend de frequência versionado
-├── assets/                 # CSS e JavaScript compartilhados
-├── icons/                  # ícones e manifesto PWA
-├── img/
-│   └── optimized/          # avatares WebP leves
-├── setores/                # compatibilidade com links antigos
-├── tests/                  # testes sem dependências externas
-├── chamada.html           # chamada parametrizada por projeto
-├── escolhersetores.html   # seletor de projetos
-├── dashboard.html         # indicadores de frequência
-└── login.html / index.html / students.html / student.html / editor.html
+├── appscript/
+│   ├── projeto7/          # login, perfis, avaliações e cadastros
+│   ├── Code.gs            # frequência e dashboard
+│   └── appsscript.json
+├── assets/                # CSS, API client, loading e componentes compartilhados
+├── icons/                 # favicon e manifesto da PWA
+├── img/optimized/         # avatares WebP leves
+├── setores/               # redirecionamentos de links antigos
+├── tests/                 # testes de backend e frontend
+├── index.html             # visão geral acadêmica
+├── students.html          # diretório de alunos
+├── student.html           # perfil e evolução individual
+├── editor.html            # gestão acadêmica
+├── escolhersetores.html   # seleção do projeto
+├── chamada.html           # frequência
+└── dashboard.html         # indicadores de frequência
 ```
 
-## Melhorias de desempenho
+## Desempenho
 
-A versão 2 reduz o tempo percebido e o volume transferido de várias formas:
+As telas continuam sujeitas ao tempo de inicialização a frio do Apps Script, mas agora realizam muito menos execuções e deixam claro que a operação está em andamento.
 
-- O frontend de perfis executa leituras independentes em paralelo e reutiliza metadados estáveis durante a sessão.
-- Projetos e listas de alunos ficam em cache por cinco minutos no navegador e no Apps Script.
-- O dashboard usa uma única solicitação inicial e limita os lançamentos enviados para a tela.
-- O backend não abre nem valida planilhas que uma rota não utiliza.
-- A substituição de uma chamada apaga blocos contíguos de linhas, em vez de executar um `deleteRow` para cada aluno.
-- Os resumos são calculados em uma única passagem pelos dados.
-- As 173 fotos ganharam versões WebP de 128 px: o conjunto usado pelos avatares caiu de aproximadamente **38,7 MB para 315 KB** (mais de 99% de redução). Os PNGs originais continuam como fallback.
-- As antigas páginas duplicadas de setores agora redirecionam para `chamada.html?projeto=...`, mantendo os links existentes.
+- A visão geral caiu de quatro chamadas ao Apps Script para uma rota agregada.
+- O diretório recebe alunos, setores e bolsas em uma única solicitação inicial.
+- A gestão acadêmica caiu de quatro solicitações iniciais para uma.
+- O perfil individual recebe dados e competências em uma única solicitação.
+- Setores, bolsas, competências e configurações usam cache no servidor com invalidação após escrita.
+- O navegador evita chamadas duplicadas em andamento e reutiliza leituras recentes durante a sessão.
+- Projetos e listas de chamada ficam em cache por cinco minutos.
+- A substituição de uma chamada remove blocos contíguos de linhas, em vez de apagar uma linha por aluno.
+- O dashboard calcula métricas e resumos em uma passagem e mantém um cache curto por filtro.
+- As 173 fotos possuem versões WebP de 128 px. O conjunto usado nos avatares caiu de aproximadamente 38,7 MB para 315 KB.
+- As antigas páginas duplicadas de setores redirecionam para uma única tela parametrizada.
 
-O tempo frio do Apps Script ainda depende da infraestrutura do Google. Antes desta revisão, as medições do deploy atual ficaram em torno de 12–14 segundos por solicitação; por isso, reduzir a quantidade de solicitações e sempre mostrar o andamento é tão importante quanto otimizar o código do servidor.
+## Interface
 
-## Configurar o Apps Script de frequência
+A identidade visual foi refeita para apresentar o sistema como uma plataforma acadêmica institucional:
 
-1. Faça backup do projeto Apps Script que atende `assets/config2.js`.
-2. Copie [`appscript/Code.gs`](appscript/Code.gs) para esse projeto.
-3. Em **Configurações do projeto → Propriedades do script**, cadastre:
+- tela de acesso responsiva com linguagem educacional;
+- navegação consistente entre visão geral, alunos, frequência e gestão;
+- hierarquia visual de títulos, indicadores e ações rápidas;
+- paleta institucional em azul-marinho, azul e verde;
+- diretório com avatares e estados vazios;
+- layout adaptado para desktop e celular;
+- feedback visual imediato para carregamentos e envios demorados.
 
-   - `ATTENDANCE_SPREADSHEET_ID`: ID da planilha que contém `Attendance`.
-   - `SOURCE_ROSTER_SPREADSHEET_ID`: ID da planilha que contém `STUDENTS` e `SECTORS`.
-   - `ADMIN_TOKEN`: valor longo e aleatório para proteger a execução automática via HTTP (opcional, mas recomendado).
+## Apps Script
 
-4. Confirme o fuso horário `America/Recife`.
-5. Execute `configurarProjeto_` uma vez no editor e autorize o acesso às planilhas.
-6. Se desejar a presença automática às 18h, execute `instalarTriggerPresencaAutomatica_` uma vez.
-7. Crie uma **nova versão** do deploy como aplicativo da web, executando como o proprietário. Atualize `assets/config2.js` somente se a URL mudar.
+### Frequência
 
-Os IDs das planilhas não ficam mais expostos no repositório público. Eles são lidos das Propriedades do script.
+O backend lê estas propriedades privadas em **Configurações do projeto → Propriedades do script**:
 
-### Atualizar com clasp (opcional)
+- `ATTENDANCE_SPREADSHEET_ID`
+- `SOURCE_ROSTER_SPREADSHEET_ID`
+- `ADMIN_TOKEN` (opcional, recomendado para a ação administrativa via HTTP)
+
+Os IDs usados pela implantação foram migrados para as propriedades do Apps Script e não ficam no código público.
+
+Funções administrativas disponíveis no editor:
+
+- `configurarProjeto_()` — valida as abas e limpa os caches;
+- `instalarTriggerPresencaAutomatica_()` — instala o processamento diário às 18h;
+- `limparCaches_()` — força a atualização de alunos e responsáveis.
+
+### Perfis e avaliações
+
+Execute `setupScholarshipSystem()` somente ao preparar uma planilha nova. Para criar o primeiro usuário sem senha exposta no código:
+
+1. Defina temporariamente `INITIAL_USER_LOGIN`, `INITIAL_USER_PASSWORD` e `INITIAL_USER_ROLE` nas propriedades do script.
+2. Execute `seedInitialUserFromProperties()`.
+3. A propriedade com a senha será removida automaticamente após a criação.
+
+### Sincronização com `clasp`
+
+Os arquivos `.clasp.json` reais e as credenciais OAuth são ignorados pelo Git. Nunca publique `.clasprc.json`, senhas ou tokens.
 
 ```bash
 npm install -g @google/clasp
-cd appscript
-cp .clasp.json.example .clasp.json
-# informe o scriptId real em .clasp.json
 clasp login
+
+# dentro da pasta vinculada ao Apps Script
+clasp pull
 clasp push
+clasp version "descrição da versão"
+clasp deployments
 ```
 
-O arquivo `.clasp.json` real está ignorado pelo Git para não publicar o ID do projeto.
+Antes de enviar alterações, faça `clasp pull` em uma pasta limpa ou revise o projeto remoto para evitar sobrescrever trabalho não versionado.
 
 ## Desenvolvimento local
 
-Não abra os HTMLs diretamente com `file://`, pois o service worker e algumas regras do navegador precisam de HTTP:
+Requer Node.js 20 ou superior. Para servir o frontend:
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Depois acesse `http://localhost:8080/escolhersetores.html`.
+Acesse `http://localhost:8080/login.html` ou `http://localhost:8080/escolhersetores.html`.
 
-Para validar sintaxe, links locais, rotas antigas, imagens otimizadas e helpers do Apps Script:
+Execute a validação completa com:
 
 ```bash
 npm test
 ```
 
-Para regerar as páginas de compatibilidade depois de alterar projetos:
+Os testes verificam sintaxe, rotas agregadas, segurança do usuário inicial, cache do Apps Script, links locais, indicadores de carregamento, redirecionamentos antigos e imagens otimizadas.
 
-```bash
-npm run generate:routes
-```
+## Segurança
 
-## Segurança e dados
-
-- A área de perfis usa token, mas o código do backend de autenticação ainda precisa ser versionado e auditado.
-- A API de frequência atualmente é publicada para acesso anônimo; qualquer pessoa que conheça a URL pode consultar nomes e tentar enviar dados. Para dados reais de alunos, recomenda-se migrar esse módulo para autenticação do Google Workspace ou para o mesmo controle de sessão da área de perfis.
-- Não publique senhas, tokens administrativos, IDs de planilhas ou exportações com dados pessoais.
+- Não publique planilhas, senhas, tokens de sessão, credenciais OAuth ou dados pessoais exportados.
+- A área de perfis exige sessão e papel de acesso.
+- A API de frequência permanece acessível anonimamente para ser compatível com o fluxo atual. Para uso fora da equipe, recomenda-se adicionar autenticação institucional também a esse módulo.
+- As antigas rotinas com senhas padrão foram removidas do código versionado.
 
 ---
 
