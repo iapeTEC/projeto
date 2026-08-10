@@ -45,6 +45,9 @@ test('editor seleciona alunos sem expor ID ou usar modais aninhados', async () =
   assert.doesNotMatch(html, /studentPickerModal|cardModal|btnOpenStudentPicker/);
   assert.match(script, /function selectStudent\(/);
   assert.match(script, /findStudent\(studentId\)/);
+  assert.match(script, /update_mask/);
+  assert.match(script, /function buildStudentRequest\(/);
+  assert.match(script, /clear_birth_date/);
 });
 
 test('diretório oferece busca de alunos instantânea fora dos filtros', async () => {

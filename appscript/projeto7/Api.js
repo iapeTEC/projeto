@@ -32,7 +32,7 @@
  * - Rodar setupScholarshipSystem() do Code.gs antes.
  */
 
-const PROFILE_API_VERSION = "2.2.0";
+const PROFILE_API_VERSION = "2.3.0";
 const PROFILE_CACHE_PREFIX = "profile-api:v2:";
 const PROFILE_CACHEABLE_SHEETS = Object.freeze({
   SECTORS: 600,
@@ -360,65 +360,133 @@ function _getStudentProfile_(req, ctx) {
 
 function _upsertStudent_(req, ctx) {
   const p = req.student || req;
-
-  const studentId = String(p.student_id || "").trim() || _uuid_();
-  const name = String(p.name || "").trim();
-  if (!name) throw new Error("student.name is required");
-
-  const sex = String(p.sex || "").trim();
-  const birthDate = String(p.birth_date || "").trim();
-  const age = birthDate ? _calcAge_(birthDate) : (String(p.age || "").trim() || "");
-  const phone = String(p.phone_e164 || p.phone || "").trim();
-  const phoneDisplay = String(p.phone_display || "").trim() || phone;
-  const photoUrl = String(p.photo_url || "").trim();
-
-  const scholarshipTypeId = String(p.scholarship_type_id || "").trim();
-  const scholarshipTypeName = String(p.scholarship_type_name || "").trim();
-  const sectorId = String(p.sector_current_id || "").trim();
-  const sectorName = String(p.sector_current_name || "").trim();
-
-  const workloadMinutes = String(p.workload_minutes || "").trim();
-  const status = String(p.status || "ACTIVE").trim();
-  const notes = String(p.notes || "").trim();
-
-  const countryCode = String(_getSetting_("DEFAULT_COUNTRY_CODE", "55")).trim();
-  const normalizedPhone = _normalizePhoneE164_(phone, countryCode);
-  const waLink = normalizedPhone ? ("https://wa.me/" + normalizedPhone.replace("+", "")) : "";
-
-  const now = _nowIso_();
-
+  const requestedStudentId = String(p.student_id || "").trim();
+  const studentId = requestedStudentId || _uuid_();
   const sheet = _sheet_("STUDENTS");
   const idx = _findRowByKey_(sheet, "student_id", studentId);
+  const rowObj = _buildStudentRow_(idx.row || {}, p, {
+    studentId: studentId,
+    now: _nowIso_(),
+    countryCode: String(_getSetting_("DEFAULT_COUNTRY_CODE", "55")).trim(),
+    isNew: idx.rowNumber === 0
+  });
 
-  const rowObj = {
-    student_id: studentId,
-    name: name,
-    sex: sex,
-    birth_date: birthDate,
-    age: age,
-    phone_e164: normalizedPhone,
-    phone_display: phoneDisplay,
-    whatsapp_link: waLink,
-    photo_url: photoUrl,
-    scholarship_type_id: scholarshipTypeId,
-    scholarship_type_name: scholarshipTypeName,
-    sector_current_id: sectorId,
-    sector_current_name: sectorName,
-    workload_minutes: workloadMinutes,
-    status: status,
-    notes: notes,
-    created_at: now,
-    updated_at: now
-  };
+  if (!rowObj.name) throw new Error("student.name is required");
 
   if (idx.rowNumber === 0) {
     _appendObjectRow_(sheet, rowObj);
+  } else if (Array.isArray(p.update_mask)) {
+    _updateObjectFields_(sheet, idx.rowNumber, rowObj, _studentColumnsForMask_(p.update_mask));
   } else {
-    rowObj.created_at = idx.row.created_at || now;
     _updateObjectRow_(sheet, idx.rowNumber, rowObj);
   }
 
   return { ok: true, student_id: studentId };
+}
+
+function _buildStudentRow_(existing, patch, options) {
+  const base = existing || {};
+  const p = patch || {};
+  const opts = options || {};
+  const isNew = !!opts.isNew;
+  const updateMask = Array.isArray(p.update_mask)
+    ? p.update_mask.map(String).filter(Boolean)
+    : [];
+  const hasMask = Array.isArray(p.update_mask);
+
+  function supplied(key) {
+    return Object.prototype.hasOwnProperty.call(p, key) && (!hasMask || updateMask.indexOf(key) !== -1);
+  }
+
+  function textValue(key, defaultValue) {
+    if (supplied(key)) return String(p[key] === undefined || p[key] === null ? "" : p[key]).trim();
+    const previous = base[key];
+    if (previous !== undefined && previous !== null) return String(previous).trim();
+    return String(defaultValue === undefined ? "" : defaultValue).trim();
+  }
+
+  const rawExistingBirthDate = String(base.birth_date || "").trim();
+  let birthDate = _normalizeStudentDate_(rawExistingBirthDate) || rawExistingBirthDate;
+  let birthDateChanged = false;
+  if (supplied("birth_date")) {
+    const rawBirthDate = String(p.birth_date === undefined || p.birth_date === null ? "" : p.birth_date).trim();
+    const normalizedBirthDate = _normalizeStudentDate_(rawBirthDate);
+    const clearBirthDate = p.clear_birth_date === true || String(p.clear_birth_date || "").toUpperCase() === "TRUE";
+
+    if (rawBirthDate && !normalizedBirthDate) throw new Error("Data de nascimento inválida");
+    if (normalizedBirthDate) {
+      birthDateChanged = normalizedBirthDate !== (_normalizeStudentDate_(rawExistingBirthDate) || rawExistingBirthDate);
+      birthDate = normalizedBirthDate;
+    } else if (isNew || !rawExistingBirthDate || clearBirthDate) {
+      birthDateChanged = !!rawExistingBirthDate;
+      birthDate = "";
+    }
+    // Em atualizações antigas, um campo vazio sem confirmação nunca apaga a data existente.
+  }
+
+  let normalizedPhone = String(base.phone_e164 || "").trim();
+  let phoneDisplay = String(base.phone_display || "").trim();
+  if (supplied("phone") || supplied("phone_e164")) {
+    const rawPhone = supplied("phone_e164") ? textValue("phone_e164") : textValue("phone");
+    normalizedPhone = _normalizePhoneE164_(rawPhone, opts.countryCode || "55");
+    phoneDisplay = supplied("phone_display") ? textValue("phone_display") : rawPhone;
+  } else if (supplied("phone_display")) {
+    phoneDisplay = textValue("phone_display");
+  }
+
+  let age = textValue("age");
+  if ((isNew || birthDateChanged) && _normalizeStudentDate_(birthDate)) age = _calcAge_(birthDate);
+  else if (birthDateChanged && !birthDate) age = "";
+
+  const row = Object.assign({}, base, {
+    student_id: String(opts.studentId || base.student_id || "").trim(),
+    name: textValue("name"),
+    sex: textValue("sex"),
+    birth_date: birthDate,
+    age: age,
+    phone_e164: normalizedPhone,
+    phone_display: phoneDisplay,
+    whatsapp_link: normalizedPhone ? ("https://wa.me/" + normalizedPhone.replace("+", "")) : "",
+    photo_url: textValue("photo_url"),
+    scholarship_type_id: textValue("scholarship_type_id"),
+    scholarship_type_name: textValue("scholarship_type_name"),
+    sector_current_id: textValue("sector_current_id"),
+    sector_current_name: textValue("sector_current_name"),
+    workload_minutes: textValue("workload_minutes"),
+    status: textValue("status", "ACTIVE") || "ACTIVE",
+    notes: textValue("notes"),
+    created_at: String(base.created_at || opts.now || "").trim(),
+    updated_at: String(opts.now || "").trim()
+  });
+
+  return row;
+}
+
+function _studentColumnsForMask_(updateMask) {
+  const mapping = {
+    name: ["name"],
+    sex: ["sex"],
+    birth_date: ["birth_date", "age"],
+    phone: ["phone_e164", "phone_display", "whatsapp_link"],
+    phone_e164: ["phone_e164", "phone_display", "whatsapp_link"],
+    phone_display: ["phone_display"],
+    photo_url: ["photo_url"],
+    scholarship_type_id: ["scholarship_type_id"],
+    scholarship_type_name: ["scholarship_type_name"],
+    sector_current_id: ["sector_current_id"],
+    sector_current_name: ["sector_current_name"],
+    workload_minutes: ["workload_minutes"],
+    status: ["status"],
+    notes: ["notes"]
+  };
+  const out = [];
+  (Array.isArray(updateMask) ? updateMask : []).forEach(key => {
+    (mapping[String(key)] || []).forEach(column => {
+      if (out.indexOf(column) === -1) out.push(column);
+    });
+  });
+  if (out.indexOf("updated_at") === -1) out.push("updated_at");
+  return out;
 }
 
 function _deactivateStudent_(req, ctx) {
@@ -1101,7 +1169,7 @@ function _getAll_(sheetName) {
 
   const rows = values.map(row => {
     const obj = {};
-    for (var c = 0; c < headers.length; c++) obj[headers[c]] = String(row[c] !== undefined ? row[c] : "");
+    for (var c = 0; c < headers.length; c++) obj[headers[c]] = _serializeSheetCell_(row[c], headers[c]);
     return obj;
   });
 
@@ -1127,6 +1195,30 @@ function _updateObjectRow_(sheet, rowNumber, obj) {
   const headers = _headers_(sheet);
   const row = headers.map(h => (obj[h] !== undefined ? obj[h] : ""));
   sheet.getRange(rowNumber, 1, 1, headers.length).setValues([row]);
+  _invalidateSheetCache_(sheet.getName());
+}
+
+function _updateObjectFields_(sheet, rowNumber, obj, fields) {
+  const headers = _headers_(sheet);
+  const columns = (fields || []).map(field => headers.indexOf(field))
+    .filter(index => index >= 0)
+    .sort((a, b) => a - b);
+  if (!columns.length) return;
+
+  const groups = [];
+  columns.forEach(index => {
+    const last = groups[groups.length - 1];
+    if (last && index === last[last.length - 1] + 1) last.push(index);
+    else groups.push([index]);
+  });
+
+  groups.forEach(group => {
+    const values = group.map(index => {
+      const header = headers[index];
+      return obj[header] !== undefined ? obj[header] : "";
+    });
+    sheet.getRange(rowNumber, group[0] + 1, 1, group.length).setValues([values]);
+  });
   _invalidateSheetCache_(sheet.getName());
 }
 
@@ -1191,7 +1283,7 @@ function _rowToObj_(sheet, rowNumber) {
   const headers = _headers_(sheet);
   const row = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
   const obj = {};
-  for (var i = 0; i < headers.length; i++) obj[headers[i]] = String(row[i] !== undefined ? row[i] : "");
+  for (var i = 0; i < headers.length; i++) obj[headers[i]] = _serializeSheetCell_(row[i], headers[i]);
   return obj;
 }
 
@@ -1289,6 +1381,43 @@ function _calcAge_(birthDate) {
   const mm = now.getMonth() - dob.getMonth();
   if (mm < 0 || (mm === 0 && now.getDate() < dob.getDate())) age--;
   return String(age);
+}
+
+function _normalizeStudentDate_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+
+  const raw = String(value === undefined || value === null ? "" : value).trim();
+  if (!raw) return "";
+
+  let match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:\D|$)/);
+  if (match) {
+    const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    const date = new Date(year, month - 1, day, 12, 0, 0);
+    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
+      return match[1] + "-" + match[2] + "-" + match[3];
+    }
+    return "";
+  }
+
+  match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (match) return _normalizeStudentDate_(match[3] + "-" + match[2] + "-" + match[1]);
+
+  const parsed = new Date(raw);
+  if (isNaN(parsed.getTime())) return "";
+  return Utilities.formatDate(parsed, Session.getScriptTimeZone(), "yyyy-MM-dd");
+}
+
+function _serializeSheetCell_(value, header) {
+  if (value === undefined || value === null || value === "") return "";
+  if (!(value instanceof Date) || isNaN(value.getTime())) return String(value);
+  const dateOnly = header === "birth_date" || header === "date";
+  return Utilities.formatDate(
+    value,
+    Session.getScriptTimeZone(),
+    dateOnly ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss"
+  );
 }
 
 function _normalizePhoneE164_(phone, defaultCountryCode) {
