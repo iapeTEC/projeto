@@ -64,7 +64,7 @@
 
   function cacheKey(action, payload) {
     const user = getUser();
-    return 'profile-api:v2:' + String(user && user.login || 'anonymous') + ':' + action + ':' + stableStringify(payload || {});
+    return 'profile-api:v3:' + String(user && user.login || 'anonymous') + ':' + action + ':' + stableStringify(payload || {});
   }
 
   function readCache(key, maxAge) {
@@ -88,7 +88,7 @@
   function clearApiCache() {
     try {
       Object.keys(sessionStorage).forEach(function (key) {
-        if (key.indexOf('profile-api:v2:') === 0) sessionStorage.removeItem(key);
+        if (key.indexOf('profile-api:v3:') === 0) sessionStorage.removeItem(key);
       });
     } catch (error) {}
   }

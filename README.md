@@ -21,7 +21,7 @@ O sistema possui dois Apps Scripts independentes. Essa separação foi mantida p
 
 | Módulo | Configuração do frontend | Código versionado | Deploy atual |
 | --- | --- | --- | --- |
-| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | versão 8 |
+| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | versão 9 |
 | Frequência e dashboard | `assets/config2.js` | `appscript/Code.gs` | versão 6 |
 
 As duas URLs existentes foram preservadas durante a atualização. O código foi publicado sobre as implantações atuais, evitando quebrar favoritos ou links já distribuídos.
@@ -52,7 +52,10 @@ As telas continuam sujeitas ao tempo de inicialização a frio do Apps Script, m
 
 - A visão geral caiu de quatro chamadas ao Apps Script para uma rota agregada.
 - O diretório recebe alunos, setores e bolsas em uma única solicitação inicial.
+- A busca de alunos acontece no navegador a cada letra digitada e apresenta sugestões sem novas esperas no Apps Script.
 - A gestão acadêmica caiu de quatro solicitações iniciais para uma.
+- A edição usa uma lista mestre de alunos já carregada: selecionar um nome preenche o formulário imediatamente, sem uma segunda solicitação.
+- O identificador interno do aluno nunca precisa ser digitado ou carregado manualmente.
 - O perfil individual recebe dados e competências em uma única solicitação.
 - Setores, bolsas, competências e configurações usam cache no servidor com invalidação após escrita.
 - O navegador evita chamadas duplicadas em andamento e reutiliza leituras recentes durante a sessão.
@@ -73,6 +76,7 @@ A identidade visual foi refeita para apresentar o sistema como uma plataforma ac
 - diretório com avatares e estados vazios;
 - layout adaptado para desktop e celular;
 - feedback visual imediato para carregamentos e envios demorados.
+- editor acadêmico em fluxo mestre-detalhe, sem janelas sobrepostas, com pesquisa por aluno, setor ou bolsa.
 
 ## Apps Script
 
