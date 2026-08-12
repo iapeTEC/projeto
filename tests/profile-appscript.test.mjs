@@ -12,6 +12,10 @@ const profileContext = vm.createContext({
   console,
   Date,
   Utilities: {
+    DigestAlgorithm: { SHA_256: 'SHA_256' },
+    Charset: { UTF_8: 'UTF_8' },
+    computeDigest(algorithm, value) { return Array.from(String(value)).map(char => char.charCodeAt(0)); },
+    base64EncodeWebSafe(value) { return Buffer.from(value).toString('base64url'); },
     formatDate(value, timezone, format) {
       const year = String(value.getFullYear()).padStart(4, '0');
       const month = String(value.getMonth() + 1).padStart(2, '0');
@@ -50,6 +54,18 @@ test('leituras estáveis usam cache com invalidação após escrita', () => {
   assert.match(apiSource, /PROFILE_CACHEABLE_SHEETS/);
   assert.match(apiSource, /function _invalidateSheetCache_/);
   assert.match(apiSource, /_invalidateSheetCache_\(sheet\.getName\(\)\)/);
+  assert.match(apiSource, /STUDENTS: 300/);
+  assert.match(apiSource, /USERS: 300/);
+  assert.match(apiSource, /function _readAuthCache_/);
+  assert.match(apiSource, /function _writeAuthCache_/);
+  assert.match(apiSource, /_writeAuthCache_\(token, \{/);
+});
+
+test('chave do cache de sessão não expõe o token', () => {
+  const token = 'token-super-secreto';
+  const key = profileContext._authCacheKey_(token);
+  assert.match(key, /^profile-api:v2:auth:/);
+  assert.doesNotMatch(key, new RegExp(token));
 });
 
 test('datas de planilha são entregues no formato aceito pelo navegador', () => {

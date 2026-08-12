@@ -65,6 +65,8 @@ test('diretório oferece busca de alunos instantânea fora dos filtros', async (
 
 test('solicitações exibem barra, spinner, mensagem e estado ocupado', async () => {
   const loading = await readFile(resolve(root, 'assets/loading.js'), 'utf8');
+  const profileApi = await readFile(resolve(root, 'assets/api.js'), 'utf8');
+  const attendanceApi = await readFile(resolve(root, 'assets/attendance-api.js'), 'utf8');
   const attendanceCss = await readFile(resolve(root, 'assets/attendance.css'), 'utf8');
   const profileCss = await readFile(resolve(root, 'assets/app.css'), 'utf8');
   assert.match(loading, /app-loading-bar/);
@@ -73,6 +75,10 @@ test('solicitações exibem barra, spinner, mensagem e estado ocupado', async ()
   assert.match(loading, /button\.setAttribute\('aria-busy'/);
   assert.match(attendanceCss, /@keyframes loading-bar/);
   assert.match(profileCss, /@keyframes app-loading-bar/);
+  assert.match(profileApi, /REQUEST_TIMEOUT_MS = 90000/);
+  assert.match(attendanceApi, /REQUEST_TIMEOUT_MS = 90000/);
+  assert.match(profileApi, /Continuamos tentando/);
+  assert.match(attendanceApi, /Continuamos tentando/);
 });
 
 test('páginas principais não apontam para arquivos locais inexistentes', async () => {

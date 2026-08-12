@@ -21,7 +21,7 @@ O sistema possui dois Apps Scripts independentes. Essa separação foi mantida p
 
 | Módulo | Configuração do frontend | Código versionado | Deploy atual |
 | --- | --- | --- | --- |
-| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | versão 10 |
+| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | versão 11 |
 | Frequência e dashboard | `assets/config2.js` | `appscript/Code.gs` | versão 6 |
 
 As duas URLs existentes foram preservadas durante a atualização. O código foi publicado sobre as implantações atuais, evitando quebrar favoritos ou links já distribuídos.
@@ -60,7 +60,9 @@ As telas continuam sujeitas ao tempo de inicialização a frio do Apps Script, m
 - Datas vindas das planilhas são normalizadas antes de chegar aos campos do navegador.
 - O perfil individual recebe dados e competências em uma única solicitação.
 - Setores, bolsas, competências e configurações usam cache no servidor com invalidação após escrita.
+- Alunos, usuários e sessões autenticadas também usam cache curto no Apps Script, evitando releituras repetidas da planilha a cada tela.
 - O navegador evita chamadas duplicadas em andamento e reutiliza leituras recentes durante a sessão.
+- Em inicializações lentas do Google, o navegador mantém a solicitação ativa por até 90 segundos e informa que continua tentando.
 - Projetos e listas de chamada ficam em cache por cinco minutos.
 - A substituição de uma chamada remove blocos contíguos de linhas, em vez de apagar uma linha por aluno.
 - O dashboard calcula métricas e resumos em uma passagem e mantém um cache curto por filtro.
