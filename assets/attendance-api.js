@@ -7,6 +7,8 @@
   ]);
   const CACHE_PREFIX = 'attendance:v2:';
   const inflight = new Map();
+  const REQUEST_TIMEOUT_MS = 90000;
+  const SLOW_REQUEST_NOTICE_MS = 25000;
 
   function apiUrl() {
     const value = window.APP_CONFIG && window.APP_CONFIG.API_URL;
@@ -34,8 +36,13 @@
 
   async function request(url, options, message) {
     const controller = new AbortController();
-    const timer = setTimeout(function () { controller.abort(); }, 45000);
     const token = window.Loading ? window.Loading.start(message || 'Consultando dados…') : null;
+    const slowNotice = setTimeout(function () {
+      if (token && window.Loading) {
+        window.Loading.update(token, 'O Google está respondendo mais devagar. Continuamos tentando…');
+      }
+    }, SLOW_REQUEST_NOTICE_MS);
+    const timer = setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS);
 
     try {
       const response = await fetch(url, Object.assign({
@@ -57,11 +64,12 @@
       return data;
     } catch (error) {
       if (error && error.name === 'AbortError') {
-        throw new Error('O servidor demorou mais de 45 segundos. Tente novamente.');
+        throw new Error('O Google Apps Script não respondeu em 90 segundos. Aguarde um instante e tente novamente.');
       }
       throw error;
     } finally {
       clearTimeout(timer);
+      clearTimeout(slowNotice);
       if (token && window.Loading) window.Loading.stop(token);
     }
   }

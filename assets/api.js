@@ -1,5 +1,7 @@
 (function () {
   const inflight = new Map();
+  const REQUEST_TIMEOUT_MS = 90000;
+  const SLOW_REQUEST_NOTICE_MS = 25000;
   const READ_CACHE_MS = Object.freeze({
     listSectors: 10 * 60 * 1000,
     listScholarshipTypes: 10 * 60 * 1000,
@@ -64,7 +66,7 @@
 
   function cacheKey(action, payload) {
     const user = getUser();
-    return 'profile-api:v4:' + String(user && user.login || 'anonymous') + ':' + action + ':' + stableStringify(payload || {});
+    return 'profile-api:v5:' + String(user && user.login || 'anonymous') + ':' + action + ':' + stableStringify(payload || {});
   }
 
   function readCache(key, maxAge) {
@@ -88,7 +90,7 @@
   function clearApiCache() {
     try {
       Object.keys(sessionStorage).forEach(function (key) {
-        if (key.indexOf('profile-api:v4:') === 0) sessionStorage.removeItem(key);
+        if (key.indexOf('profile-api:v5:') === 0) sessionStorage.removeItem(key);
       });
     } catch (error) {}
   }
@@ -112,8 +114,13 @@
     if (action !== 'login') body.token = body.token || getToken();
 
     const controller = new AbortController();
-    const timer = setTimeout(function () { controller.abort(); }, 45000);
     const loadingToken = window.Loading ? window.Loading.start(requestLabel(action)) : null;
+    const slowNotice = setTimeout(function () {
+      if (loadingToken && window.Loading) {
+        window.Loading.update(loadingToken, 'O Google está respondendo mais devagar. Continuamos tentando…');
+      }
+    }, SLOW_REQUEST_NOTICE_MS);
+    const timer = setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch(config.API_URL, {
         method: 'POST',
@@ -136,11 +143,12 @@
       return data;
     } catch (error) {
       if (error && error.name === 'AbortError') {
-        throw new Error('O servidor demorou mais de 45 segundos. Tente novamente.');
+        throw new Error('O Google Apps Script não respondeu em 90 segundos. Aguarde um instante e tente novamente.');
       }
       throw error;
     } finally {
       clearTimeout(timer);
+      clearTimeout(slowNotice);
       if (loadingToken && window.Loading) window.Loading.stop(loadingToken);
     }
   }

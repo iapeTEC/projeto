@@ -32,14 +32,17 @@
  * - Rodar setupScholarshipSystem() do Code.gs antes.
  */
 
-const PROFILE_API_VERSION = "2.3.0";
+const PROFILE_API_VERSION = "2.4.0";
 const PROFILE_CACHE_PREFIX = "profile-api:v2:";
 const PROFILE_CACHEABLE_SHEETS = Object.freeze({
+  STUDENTS: 300,
   SECTORS: 600,
   SCHOLARSHIP_TYPES: 600,
   COMPETENCIES: 600,
-  SETTINGS: 300
+  SETTINGS: 300,
+  USERS: 300
 });
+const PROFILE_SESSION_CACHE_SECONDS = 300;
 
 const _sheetRuntimeCache = {};
 const _rowsRuntimeCache = {};
@@ -195,6 +198,11 @@ function _requireAuth_(req) {
   const token = _getTokenFromReq_(req);
   if (!token) throw new Error("Missing session token");
 
+  const cachedAuth = _readAuthCache_(token);
+  if (cachedAuth) {
+    return { ok: true, ctx: { token: token, session: cachedAuth.session, user: cachedAuth.user } };
+  }
+
   const sess = _getSessionByToken_(token);
   if (!sess) throw new Error("Invalid session token");
   if (sess.revoked === "TRUE") throw new Error("Session revoked");
@@ -204,7 +212,7 @@ function _requireAuth_(req) {
   if (!user) throw new Error("User not found");
   if (String(user.active || "").toUpperCase() !== "TRUE") throw new Error("User inactive");
 
-
+  _writeAuthCache_(token, sess, user);
   return { ok: true, ctx: { token: token, session: sess, user: user } };
 }
 
@@ -243,16 +251,29 @@ function _login_(req) {
   const expires = new Date(issued.getTime() + sessionDays * 24 * 60 * 60 * 1000);
 
   const token = _randToken_();
+  const issuedAt = _formatDateTime_(issued);
+  const expiresAt = _formatDateTime_(expires);
   _appendRow_("SESSIONS", [
     token,
     user.user_id,
     user.role,
-    _formatDateTime_(issued),
-    _formatDateTime_(expires),
+    issuedAt,
+    expiresAt,
     "FALSE",
     String(req.ip || ""),
     String(req.user_agent || "")
   ]);
+
+  _writeAuthCache_(token, {
+    session_token: token,
+    user_id: user.user_id,
+    role: user.role,
+    issued_at: issuedAt,
+    expires_at: expiresAt,
+    revoked: "FALSE",
+    ip: String(req.ip || ""),
+    user_agent: String(req.user_agent || "")
+  }, user);
 
   _updateUserLastLogin_(user.user_id);
 
@@ -260,12 +281,13 @@ function _login_(req) {
     ok: true,
     token: token,
     user: { user_id: user.user_id, login: user.login, role: user.role },
-    expires_at: _formatDateTime_(expires)
+    expires_at: expiresAt
   };
 }
 
 function _logout_(req, ctx) {
   _revokeSession_(ctx.token);
+  _removeAuthCache_(ctx.token);
   return { ok: true };
 }
 
@@ -1130,14 +1152,20 @@ function _revokeAllSessionsByUser_(userId) {
   const values = rng.getValues();
 
   let changed = false;
+  const revokedTokens = [];
   for (var i = 0; i < values.length; i++) {
     const rowUser = String(values[i][colUser - 1] || "");
     if (rowUser === userId) {
+      const token = String(values[i][0] || "");
+      if (token) revokedTokens.push(token);
       values[i][colRevoked - 1] = "TRUE";
       changed = true;
     }
   }
-  if (changed) rng.setValues(values);
+  if (changed) {
+    rng.setValues(values);
+    revokedTokens.forEach(_removeAuthCache_);
+  }
 }
 
 /* ========================= Sheet helpers ========================= */
@@ -1235,6 +1263,40 @@ function _sheetCacheKey_(sheetName) {
   return PROFILE_CACHE_PREFIX + "sheet:" + sheetName;
 }
 
+function _authCacheKey_(token) {
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token || ""), Utilities.Charset.UTF_8);
+  return PROFILE_CACHE_PREFIX + "auth:" + Utilities.base64EncodeWebSafe(digest).replace(/=+$/g, "");
+}
+
+function _readAuthCache_(token) {
+  try {
+    const value = CacheService.getScriptCache().get(_authCacheKey_(token));
+    if (!value) return null;
+    const cached = JSON.parse(value);
+    if (!cached || !cached.session || !cached.user) return null;
+    if (cached.session.revoked === "TRUE") return null;
+    if (new Date(cached.session.expires_at).getTime() < Date.now()) return null;
+    if (String(cached.user.active || "").toUpperCase() !== "TRUE") return null;
+    return cached;
+  } catch (_) {
+    return null;
+  }
+}
+
+function _writeAuthCache_(token, session, user) {
+  try {
+    CacheService.getScriptCache().put(
+      _authCacheKey_(token),
+      JSON.stringify({ session: session, user: user }),
+      PROFILE_SESSION_CACHE_SECONDS
+    );
+  } catch (_) {}
+}
+
+function _removeAuthCache_(token) {
+  try { CacheService.getScriptCache().remove(_authCacheKey_(token)); } catch (_) {}
+}
+
 function _readSheetCache_(sheetName) {
   if (!PROFILE_CACHEABLE_SHEETS[sheetName]) return null;
   try {
@@ -1318,6 +1380,7 @@ function _revokeSession_(token) {
 
   idx.row.revoked = "TRUE";
   _updateObjectRow_(sh, idx.rowNumber, idx.row);
+  _removeAuthCache_(token);
 }
 
 function _updateUserLastLogin_(userId) {
