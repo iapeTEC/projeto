@@ -5,11 +5,18 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#12365d">
   <title>Lista de chamada • IAPE</title>
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+  <link rel="dns-prefetch" href="//script.google.com">
+  <link rel="dns-prefetch" href="//script.googleusercontent.com">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="icons/site.webmanifest">
   <link rel="stylesheet" href="assets/attendance.css">
+  <script src="assets/config.js"></script>
   <script src="assets/config2.js"></script>
   <script src="assets/loading.js"></script>
+  <script src="assets/api.js"></script>
+  <script src="assets/ui.js"></script>
   <script src="assets/attendance-api.js"></script>
 </head>
 <body>
@@ -19,7 +26,8 @@
       <div class="nav-links">
         <a class="nav-link is-active" href="escolhersetores.html">Chamadas</a>
         <a class="nav-link" href="dashboard.html">Dashboard</a>
-        <a class="nav-link" href="login.html">Perfis</a>
+        <a class="nav-link" href="index.html">Perfis</a>
+        <div id="attendance-account"></div>
       </div>
     </nav>
 
@@ -69,6 +77,10 @@
 
   <script>
     (function () {
+      const user = window.UI.requireCapability(window.UI.CAPABILITIES.RECORD_ATTENDANCE);
+      if (!user) return;
+      window.UI.applyCapabilities(document, user);
+      window.UI.mountAttendanceAccount('attendance-account', user);
       const params = new URLSearchParams(location.search);
       const project = (params.get('projeto') || '').trim();
       const state = { students: [], responsible: '', project };

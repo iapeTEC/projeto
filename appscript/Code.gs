@@ -7,9 +7,13 @@
  *
  * Configuracao opcional:
  * - ADMIN_TOKEN (protege a execucao manual da presenca automatica via HTTP)
+ *
+ * A autenticacao reutiliza as abas USERS e SESSIONS da planilha configurada em
+ * SOURCE_ROSTER_SPREADSHEET_ID. Os tokens sao emitidos pelo Web App de perfis e
+ * somente o hash e consultado por este modulo.
  */
 
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '3.0.0';
 const DEFAULT_TZ = 'America/Recife';
 
 const SOURCE_ROSTER_SHEET_NAME = 'STUDENTS';
@@ -31,6 +35,11 @@ const DASHBOARD_CACHE_TTL_SECONDS = 90;
 const CACHE_KEY_ROSTER = 'roster:v2';
 const CACHE_KEY_SECTORS = 'sectors:v2';
 const CACHE_KEY_ATTENDANCE_VERSION = 'attendance:version';
+const ATTENDANCE_AUTH_CACHE_PREFIX = 'attendance-auth:v1:';
+const ATTENDANCE_AUTH_CACHE_SECONDS = 45;
+const ATTENDANCE_OWNER_EMAIL = 'normafederal@gmail.com';
+const ATTENDANCE_READ_ROLES = Object.freeze(['OWNER', 'ADMIN', 'EDITOR', 'USER']);
+const ATTENDANCE_WRITE_ROLES = Object.freeze(['OWNER', 'ADMIN', 'EDITOR']);
 
 const VALID_PROJECTS = Object.freeze([
   'Monitoria Escolar',
@@ -69,20 +78,20 @@ function doGet(e) {
       return respond_({ status: 'ok', message: 'webapp up', version: APP_VERSION });
     }
 
+    if (acao === 'rodarpresencaautomaticaagora') {
+      if (!isAdminRequest_(p)) requireAttendanceAuth_(p, ['OWNER', 'ADMIN'], false);
+      return respond_({ status: 'success', ...processarPresencaAutomaticaHoje_() });
+    }
+
+    requireAttendanceAuth_(p, ATTENDANCE_READ_ROLES, true);
     if (acao === 'rosterprojeto') return rosterProjeto_(p);
     if (acao === 'dashboard') return consultarDashboard_(p);
     if (acao === 'listaprojetos') return listaProjetos_();
-    if (acao === 'rodarpresencaautomaticaagora') {
-      if (!isAdminRequest_(p)) {
-        return respond_({ status: 'error', message: 'Não autorizado.' });
-      }
-      return respond_({ status: 'success', ...processarPresencaAutomaticaHoje_() });
-    }
 
     return respond_({ status: 'error', message: 'Ação GET inválida: ' + acao });
   } catch (err) {
     console.error(err && err.stack ? err.stack : err);
-    return respond_({ status: 'error', message: safeErrorMessage_(err) });
+    return respondHttpError_(err);
   }
 }
 
@@ -95,15 +104,172 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents || '{}');
     const acao = String(body.acao || '').toLowerCase();
 
-    if (acao === 'registrarfrequencia' || acao === 'registrarapontamento' || acao === '') {
+    if (acao === 'rosterprojeto') {
+      requireAttendanceAuth_(body, ATTENDANCE_READ_ROLES, true);
+      return rosterProjeto_(body);
+    }
+    if (acao === 'dashboard') {
+      requireAttendanceAuth_(body, ATTENDANCE_READ_ROLES, true);
+      return consultarDashboard_(body);
+    }
+    if (acao === 'listaprojetos') {
+      requireAttendanceAuth_(body, ATTENDANCE_READ_ROLES, true);
+      return listaProjetos_();
+    }
+    if (acao === 'registrarfrequencia' || acao === 'registrarapontamento') {
+      requireAttendanceAuth_(body, ATTENDANCE_WRITE_ROLES, false);
       return registrar_(body);
     }
 
     return respond_({ status: 'error', message: 'Ação inválida: ' + acao });
   } catch (err) {
     console.error(err && err.stack ? err.stack : err);
-    return respond_({ status: 'error', message: safeErrorMessage_(err) });
+    return respondHttpError_(err);
   }
+}
+
+/***********************
+ * AUTENTICACAO COMPARTILHADA
+ ***********************/
+function attendanceAuthError_(message, code, reason) {
+  const error = new Error(message);
+  error.code = code;
+  error.reason = reason || '';
+  return error;
+}
+
+function respondHttpError_(err) {
+  const code = Number(err && err.code);
+  return respond_({
+    status: 'error',
+    code: code === 401 || code === 403 ? code : 500,
+    reason: err && err.reason ? String(err.reason) : undefined,
+    message: code === 401
+      ? 'Sua sessão expirou. Entre novamente para continuar.'
+      : (code === 403 ? 'Seu perfil não permite realizar esta ação.' : safeErrorMessage_(err))
+  });
+}
+
+function requireAttendanceAuth_(params, roles, allowCache) {
+  const token = normalizeText_(params && params.token, 500);
+  if (!token) throw attendanceAuthError_('Sessão ausente.', 401, 'AUTH_TOKEN_MISSING');
+
+  const tokenHash = attendanceTokenHash_(token);
+  const cacheKey = ATTENDANCE_AUTH_CACHE_PREFIX + tokenHash;
+  const cache = CacheService.getScriptCache();
+  if (allowCache !== false) {
+    try {
+      const cachedRaw = cache.get(cacheKey);
+      const cached = cachedRaw ? JSON.parse(cachedRaw) : null;
+      if (cached && Number(cached.expires_at_ms || 0) > Date.now()) {
+        requireAttendanceRole_(cached, roles);
+        return cached;
+      }
+    } catch (err) {}
+  }
+
+  const source = getSourceSpreadsheet_();
+  const sessions = source.getSheetByName('SESSIONS');
+  const users = source.getSheetByName('USERS');
+  if (!sessions || !users) throw attendanceAuthError_('Autenticação indisponível.', 401, 'AUTH_SHEETS_MISSING');
+
+  const sessionHeaders = attendanceSheetHeaders_(sessions);
+  if (sessionHeaders.indexOf('token_hash') === -1 || sessionHeaders.indexOf('auth_version') === -1) {
+    throw attendanceAuthError_('A autenticação precisa ser atualizada pelo proprietário.', 401, 'AUTH_SCHEMA_OUTDATED');
+  }
+  const session = attendanceFindRow_(sessions, sessionHeaders, 'token_hash', tokenHash);
+  if (!session) throw attendanceAuthError_('Sessão inválida.', 401, 'AUTH_SESSION_NOT_FOUND');
+  if (attendanceTruthy_(session.revoked)) {
+    throw attendanceAuthError_('Sessão revogada.', 401, 'AUTH_SESSION_REVOKED');
+  }
+
+  const expiresAt = Date.parse(String(session.expires_at || ''));
+  if (!isFinite(expiresAt) || expiresAt <= Date.now()) {
+    throw attendanceAuthError_('Sessão expirada.', 401, 'AUTH_SESSION_EXPIRED');
+  }
+
+  const userHeaders = attendanceSheetHeaders_(users);
+  const user = attendanceFindRow_(users, userHeaders, 'user_id', session.user_id);
+  if (!user || !attendanceTruthy_(user.active)) {
+    throw attendanceAuthError_('Usuário inativo.', 401, 'AUTH_USER_UNAVAILABLE');
+  }
+  if (String(session.auth_version || '1') !== String(user.auth_version || '1')) {
+    throw attendanceAuthError_('Sessão revogada.', 401, 'AUTH_VERSION_MISMATCH');
+  }
+
+  const email = String(user.email || user.login || '').trim().toLowerCase();
+  const rawRole = String(user.role || '').trim().toUpperCase();
+  const auth = {
+    user_id: String(user.user_id || ''),
+    email: email,
+    role: email === ATTENDANCE_OWNER_EMAIL ? 'OWNER' : (rawRole === 'OWNER' ? 'ADMIN' : rawRole),
+    expires_at_ms: expiresAt
+  };
+  requireAttendanceRole_(auth, roles);
+
+  if (allowCache !== false) {
+    const ttl = Math.max(1, Math.min(
+      ATTENDANCE_AUTH_CACHE_SECONDS,
+      Math.floor((expiresAt - Date.now()) / 1000)
+    ));
+    try { cache.put(cacheKey, JSON.stringify(auth), ttl); } catch (err) {}
+  }
+  return auth;
+}
+
+function requireAttendanceRole_(auth, roles) {
+  const allowed = Array.isArray(roles) && roles.length ? roles : ATTENDANCE_READ_ROLES;
+  if (!auth || allowed.indexOf(String(auth.role || '').toUpperCase()) === -1) {
+    throw attendanceAuthError_('Acesso não permitido.', 403, 'AUTH_ROLE_FORBIDDEN');
+  }
+}
+
+function attendanceTokenHash_(token) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(token || ''),
+    Utilities.Charset.UTF_8
+  );
+  return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/g, '');
+}
+
+function attendanceSheetHeaders_(sheet) {
+  if (!sheet || sheet.getLastColumn() < 1) return [];
+  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0]
+    .map(function (value) { return String(value || '').trim(); });
+}
+
+function attendanceFindRow_(sheet, headers, key, value) {
+  const column = headers.indexOf(key) + 1;
+  const lastRow = sheet.getLastRow();
+  if (column < 1 || lastRow < 2 || value === undefined || value === null || value === '') return null;
+
+  const searchRange = sheet.getRange(2, column, lastRow - 1, 1);
+  const finder = searchRange
+    .createTextFinder(String(value))
+    .matchEntireCell(true)
+    .matchCase(true);
+  let cell = finder.findNext();
+  if (!cell) {
+    const expected = String(value);
+    const values = searchRange.getValues();
+    for (let index = 0; index < values.length; index++) {
+      if (String(values[index][0]) === expected) {
+        cell = sheet.getRange(index + 2, column);
+        break;
+      }
+    }
+  }
+  if (!cell) return null;
+
+  const row = sheet.getRange(cell.getRow(), 1, 1, headers.length).getDisplayValues()[0];
+  const out = {};
+  headers.forEach(function (header, index) { out[header] = row[index]; });
+  return out;
+}
+
+function attendanceTruthy_(value) {
+  return value === true || String(value || '').trim().toUpperCase() === 'TRUE';
 }
 
 /***********************
@@ -549,6 +715,188 @@ function instalarTriggerPresencaAutomatica_() {
 /***********************
  * DASHBOARD
  ***********************/
+function dashboardPositiveInt_(value, fallback, max) {
+  const parsed = Math.floor(Number(value));
+  if (!isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, max);
+}
+
+/**
+ * Agrega as linhas da aba Attendance em memoria. O helper e separado da leitura
+ * da planilha para manter uma unica chamada getRange e permitir testes do
+ * relatorio sem acessar dados reais.
+ */
+function aggregateAttendanceRows_(values, options) {
+  const opts = options || {};
+  const start = String(opts.start || '');
+  const end = String(opts.end || '');
+  const filterKey = String(opts.filterKey || '');
+  const includeRows = opts.includeRows !== false;
+  const absencesOnly = opts.absencesOnly === true;
+  const rowLimit = Math.max(0, Number(opts.rowLimit || 0));
+  const rankingLimit = dashboardPositiveInt_(opts.rankingLimit, 100, 300);
+  const minAbsences = dashboardPositiveInt_(opts.minAbsences, 1, 1000);
+  const responsibleByProject = opts.responsibleByProject || {};
+
+  const rowsOut = [];
+  const observations = [];
+  const summaryMap = {};
+  const studentMap = {};
+  let total = 0;
+  let presentCount = 0;
+  let absenceCount = 0;
+  let observationCount = 0;
+
+  for (let i = (values || []).length - 1; i >= 0; i--) {
+    const row = values[i];
+    const dateIso = normalizeDateCell_(row[0], opts.zone);
+    const project = canonicalProjectName_(row[1]);
+    const projectKey = normalizeProjectKey_(project);
+
+    if (!dateIso || dateIso < start || dateIso > end) continue;
+    if (filterKey && projectKey !== filterKey) continue;
+
+    const studentName = normalizeText_(row[3], 120);
+    const present = Number(row[4]) === 1 ? 1 : 0;
+    const observation = normalizeText_(row[6], 500);
+    const obsEnabled = Number(row[5]) === 1;
+    const responsible = normalizeText_(row[2], 120) || responsibleByProject[projectKey] || '';
+    const item = {
+      date: dateIso,
+      group: project,
+      responsible: responsible,
+      student: studentName,
+      present: present,
+      observation: observation,
+      source: normalizeText_(row[7], 30) || 'MANUAL'
+    };
+
+    total++;
+    if (present) presentCount++;
+    else absenceCount++;
+    if (obsEnabled || observation) observationCount++;
+
+    if (!summaryMap[projectKey]) {
+      summaryMap[projectKey] = {
+        group: project,
+        responsible: responsible,
+        total: 0,
+        presentes: 0,
+        faltas: 0,
+        observacoes: 0,
+        ultimaData: '',
+        _absentStudents: {}
+      };
+    }
+    const summary = summaryMap[projectKey];
+    if (!summary.responsible && responsible) summary.responsible = responsible;
+    summary.total++;
+    if (present) summary.presentes++;
+    else summary.faltas++;
+    if (obsEnabled || observation) summary.observacoes++;
+    if (!summary.ultimaData || dateIso > summary.ultimaData) summary.ultimaData = dateIso;
+
+    if (studentName) {
+      const normalizedStudent = normalizeProjectKey_(studentName);
+      const studentKey = projectKey + '\u001f' + normalizedStudent;
+      if (!studentMap[studentKey]) {
+        studentMap[studentKey] = {
+          student: studentName,
+          group: project,
+          responsible: responsible,
+          total: 0,
+          presentes: 0,
+          faltas: 0,
+          observacoes: 0,
+          ultimaFalta: '',
+          datasFalta: [],
+          faltasConsecutivas: 0,
+          _absenceDates: {},
+          _events: []
+        };
+      }
+      const student = studentMap[studentKey];
+      if (!student.responsible && responsible) student.responsible = responsible;
+      student.total++;
+      student._events.push({ date: dateIso, present: present });
+      if (present) {
+        student.presentes++;
+      } else {
+        student.faltas++;
+        student._absenceDates[dateIso] = true;
+        summary._absentStudents[normalizedStudent] = true;
+        if (!student.ultimaFalta || dateIso > student.ultimaFalta) student.ultimaFalta = dateIso;
+      }
+      if (obsEnabled || observation) student.observacoes++;
+    }
+
+    if (observation && observations.length < 100) observations.push(item);
+    if (
+      includeRows &&
+      (!absencesOnly || !present) &&
+      (!rowLimit || rowsOut.length < rowLimit)
+    ) {
+      rowsOut.push(item);
+    }
+  }
+
+  const summaryByGroup = Object.keys(summaryMap).map(function (key) {
+    const item = summaryMap[key];
+    item.frequenciaPct = item.total ? Number(((item.presentes / item.total) * 100).toFixed(1)) : 0;
+    item.alunosComFalta = Object.keys(item._absentStudents).length;
+    delete item._absentStudents;
+    return item;
+  }).sort(function (a, b) {
+    if (b.faltas !== a.faltas) return b.faltas - a.faltas;
+    return a.group.localeCompare(b.group, 'pt-BR');
+  });
+
+  const allStudentsWithAbsences = Object.keys(studentMap).map(function (key) {
+    const item = studentMap[key];
+    item.frequenciaPct = item.total ? Number(((item.presentes / item.total) * 100).toFixed(1)) : 0;
+    item.datasFalta = Object.keys(item._absenceDates).sort().reverse().slice(0, 12);
+    item._events.sort(function (a, b) { return b.date.localeCompare(a.date); });
+    for (let i = 0; i < item._events.length && !item._events[i].present; i++) {
+      item.faltasConsecutivas++;
+    }
+    delete item._absenceDates;
+    delete item._events;
+    return item;
+  }).filter(function (item) {
+    return item.faltas >= minAbsences;
+  }).sort(function (a, b) {
+    if (b.faltas !== a.faltas) return b.faltas - a.faltas;
+    if (a.frequenciaPct !== b.frequenciaPct) return a.frequenciaPct - b.frequenciaPct;
+    if (b.ultimaFalta !== a.ultimaFalta) return b.ultimaFalta.localeCompare(a.ultimaFalta);
+    return a.student.localeCompare(b.student, 'pt-BR');
+  });
+
+  const expectedRows = absencesOnly ? absenceCount : total;
+  return {
+    metrics: {
+      totalLancamentos: total,
+      presentes: presentCount,
+      faltas: absenceCount,
+      observacoes: observationCount,
+      frequenciaPct: total ? Number(((presentCount / total) * 100).toFixed(1)) : 0,
+      alunosComFalta: Object.keys(studentMap).filter(function (key) {
+        return studentMap[key].faltas > 0;
+      }).length,
+      setoresComFalta: summaryByGroup.filter(function (item) { return item.faltas > 0; }).length
+    },
+    resumoPorGrupo: summaryByGroup,
+    rankingAlunos: allStudentsWithAbsences.slice(0, rankingLimit),
+    rankingTotal: allStudentsWithAbsences.length,
+    observacoes: observations,
+    rows: includeRows ? rowsOut : [],
+    rowsMeta: {
+      matched: expectedRows,
+      returned: includeRows ? rowsOut.length : 0,
+      truncated: !!(includeRows && rowLimit && rowsOut.length < expectedRows)
+    }
+  };
+}
+
 function consultarDashboard_(params) {
   const zone = tz_();
   const today = Utilities.formatDate(new Date(), zone, 'yyyy-MM-dd');
@@ -560,14 +908,17 @@ function consultarDashboard_(params) {
   const absencesOnly = String(params.faltas || params.absences || '0') === '1';
   const requestedLimit = Number(params.limit || 0);
   const rowLimit = requestedLimit > 0 ? Math.min(Math.floor(requestedLimit), 2000) : 0;
+  const rankingLimit = dashboardPositiveInt_(params.rankingLimit, 100, 300);
+  const minAbsences = dashboardPositiveInt_(params.minFaltas || params.minAbsences, 1, 1000);
 
   if (!isValidIsoDate_(start) || !isValidIsoDate_(end) || start > end) {
     return respond_({ status: 'error', message: 'Período inválido.' });
   }
 
   const cacheKey = [
-    'dashboard:v2', getAttendanceVersion_(), start, end, filterKey,
-    includeRows ? '1' : '0', absencesOnly ? '1' : '0', rowLimit
+    'dashboard:v3', getAttendanceVersion_(), start, end, filterKey,
+    includeRows ? '1' : '0', absencesOnly ? '1' : '0', rowLimit,
+    rankingLimit, minAbsences
   ].join(':');
   const cached = cacheGetJson_(cacheKey);
   if (cached) return respond_(cached);
@@ -575,82 +926,37 @@ function consultarDashboard_(params) {
   const sheet = getAttendanceSpreadsheet_().getSheetByName(ATTENDANCE_SHEET_NAME);
   if (!sheet) return respond_({ status: 'error', message: 'Aba Attendance não encontrada.' });
 
-  const rowsOut = [];
-  const observations = [];
-  const summaryMap = {};
-  let total = 0;
-  let presentCount = 0;
-  let absenceCount = 0;
-  let observationCount = 0;
   const lastRow = sheet.getLastRow();
-
-  if (lastRow >= 2) {
-    const values = sheet.getRange(2, 2, lastRow - 1, 8).getValues();
-
-    for (let i = values.length - 1; i >= 0; i--) {
-      const row = values[i];
-      const dateIso = normalizeDateCell_(row[0], zone);
-      const project = canonicalProjectName_(row[1]);
-      const projectKey = normalizeProjectKey_(project);
-
-      if (!dateIso || dateIso < start || dateIso > end) continue;
-      if (filterKey && projectKey !== filterKey) continue;
-
-      const item = {
-        date: dateIso,
-        group: project,
-        responsible: normalizeText_(row[2], 120),
-        student: normalizeText_(row[3], 120),
-        present: Number(row[4]) === 1 ? 1 : 0,
-        observation: normalizeText_(row[6], 500),
-        source: normalizeText_(row[7], 30) || 'MANUAL'
-      };
-      const obsEnabled = Number(row[5]) === 1;
-
-      total++;
-      if (item.present) presentCount++;
-      else absenceCount++;
-      if (obsEnabled || item.observation) observationCount++;
-
-      if (!summaryMap[project]) {
-        summaryMap[project] = { group: project, total: 0, presentes: 0, faltas: 0, observacoes: 0 };
-      }
-      const summary = summaryMap[project];
-      summary.total++;
-      if (item.present) summary.presentes++;
-      else summary.faltas++;
-      if (obsEnabled || item.observation) summary.observacoes++;
-
-      if (item.observation && observations.length < 300) observations.push(item);
-      if (
-        includeRows &&
-        (!absencesOnly || !item.present) &&
-        (!rowLimit || rowsOut.length < rowLimit)
-      ) {
-        rowsOut.push(item);
-      }
-    }
-  }
-
-  const summaryByGroup = Object.keys(summaryMap).map(function (key) {
-    const item = summaryMap[key];
-    item.frequenciaPct = item.total ? Number(((item.presentes / item.total) * 100).toFixed(1)) : 0;
-    return item;
-  }).sort(function (a, b) { return a.group.localeCompare(b.group, 'pt-BR'); });
+  const values = lastRow >= 2 ? sheet.getRange(2, 2, lastRow - 1, 8).getValues() : [];
+  const sectors = lerResponsaveisSetores_();
+  const responsibleByProject = {};
+  Object.keys(sectors).forEach(function (key) {
+    responsibleByProject[key] = sectors[key].responsavel || '';
+  });
+  const aggregate = aggregateAttendanceRows_(values, {
+    zone: zone,
+    start: start,
+    end: end,
+    filterKey: filterKey,
+    includeRows: includeRows,
+    absencesOnly: absencesOnly,
+    rowLimit: rowLimit,
+    rankingLimit: rankingLimit,
+    minAbsences: minAbsences,
+    responsibleByProject: responsibleByProject
+  });
 
   const result = {
     status: 'success',
     filter: { start: start, end: end, projeto: filterKey ? filterProject : null },
-    metrics: {
-      totalLancamentos: total,
-      presentes: presentCount,
-      faltas: absenceCount,
-      observacoes: observationCount,
-      frequenciaPct: total ? Number(((presentCount / total) * 100).toFixed(1)) : 0
-    },
-    resumoPorGrupo: summaryByGroup,
-    observacoes: observations,
-    rows: includeRows ? rowsOut : []
+    metrics: aggregate.metrics,
+    resumoPorGrupo: aggregate.resumoPorGrupo,
+    rankingAlunos: aggregate.rankingAlunos,
+    rankingTotal: aggregate.rankingTotal,
+    observacoes: aggregate.observacoes,
+    rows: aggregate.rows,
+    rowsMeta: aggregate.rowsMeta,
+    projects: listaProjetosData_(sectors)
   };
 
   cachePutJson_(cacheKey, result, DASHBOARD_CACHE_TTL_SECONDS);

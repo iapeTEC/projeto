@@ -1,9 +1,11 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<title>Perfil do aluno • IAPE Gestão Estudantil</title>
-   <link rel="preconnect" href="https://script.google.com" crossorigin>
-  <link rel="dns-prefetch" href="//script.google.com">
+	<title>Perfil do aluno • IAPE Gestão Estudantil</title>
+	   <link rel="preconnect" href="https://script.google.com" crossorigin>
+	  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+	  <link rel="dns-prefetch" href="//script.google.com">
+	  <link rel="dns-prefetch" href="//script.googleusercontent.com">
 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -100,9 +102,10 @@
 </div>
 
 <script>
-(async function(){
-  const user = window.UI.requireAuth();
-  window.UI.mountNav("");
+	(async function(){
+	  const user = window.UI.requireAuth();
+	  if(!user) return;
+	  window.UI.mountNav("");
 
   const studentId = window.UI.getParam("student_id");
   if(!studentId){
@@ -136,23 +139,44 @@
       actions.appendChild(a);
     }
 
-    if(user.role === "EDITOR"){
-      const a = document.createElement("a");
+	    if(window.UI.can(window.UI.CAPABILITIES.EDIT_ACADEMIC, user)){
+	      const a = document.createElement("a");
       a.className = "btn btn-sm btn-outline-primary";
       a.href = "editor.html?student_id=" + encodeURIComponent(st.student_id);
       a.textContent = "Editar / Avaliar";
       actions.appendChild(a);
     }
 
-    // Relatório para sponsor (linguagem neutra) — disponível para VIEWER e EDITOR
-    if(user.role === "VIEWER" || user.role === "EDITOR"){
-      const a = document.createElement("a");
-      a.className = "btn btn-sm btn-outline-dark";
-      a.href = "sponsor.html?student_id=" + encodeURIComponent(st.student_id);
-      a.textContent = "Relatório (Sponsor)";
-      actions.appendChild(a);
-    }
-  }
+	    const reportLink = document.createElement("a");
+	    reportLink.className = "btn btn-sm btn-outline-dark";
+	    reportLink.href = "sponsor.html?student_id=" + encodeURIComponent(st.student_id);
+	    reportLink.textContent = "Relatório (Sponsor)";
+	    actions.appendChild(reportLink);
+	  }
+
+	  function mountPhoto(value){
+	    const photo = el("photo");
+	    const raw = String(value || "").trim().replace(/^\.\//, "");
+	    photo.loading = "lazy";
+	    photo.decoding = "async";
+	    photo.referrerPolicy = "no-referrer";
+	    if(!raw){
+	      photo.removeAttribute("src");
+	      return;
+	    }
+	    if(/^img\/[\w\-. À-ɏ]+\.(?:png|jpe?g)$/i.test(raw)){
+	      const original = raw.split("/").map(encodeURIComponent).join("/");
+	      const file = raw.split("/").pop().replace(/\.[^.]+$/, "");
+	      photo.src = "img/optimized/" + encodeURIComponent(file) + ".webp";
+	      photo.addEventListener("error", function fallback(){
+	        photo.removeEventListener("error", fallback);
+	        photo.src = original;
+	      });
+	      return;
+	    }
+	    if(/^(?:https?:\/\/|img\/)/i.test(raw)) photo.src = raw;
+	    else photo.removeAttribute("src");
+	  }
 
   function renderBar(compList, scoresById){
     const labels = [];
@@ -245,9 +269,7 @@
     ].filter(Boolean).join(" • ");
     el("meta").textContent = meta || "—";
 
-    const photo = el("photo");
-    if(st.photo_url) photo.src = st.photo_url;
-    else photo.removeAttribute("src");
+	    mountPhoto(st.photo_url);
 
     mountActions(st);
 

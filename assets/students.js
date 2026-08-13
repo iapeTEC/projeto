@@ -21,14 +21,30 @@
       .map(function (part) { return part.charAt(0).toUpperCase(); }).join('') || 'A';
   }
 
+  function photoUrls(photo) {
+    const raw = String(photo || '').trim().replace(/^\.\//, '');
+    if (!raw) return {};
+    if (/^https?:\/\//i.test(raw)) return { primary: raw };
+
+    const clean = raw.replace(/^\.\.\//, '').replace(/^\//, '');
+    if (!/^img\/[\w\-. À-ɏ]+$/i.test(clean)) return {};
+    const file = clean.split('/').pop();
+    return {
+      primary: 'img/optimized/' + encodeURIComponent(file.replace(/\.[^.]+$/, '')) + '.webp',
+      fallback: clean.split('/').map(encodeURIComponent).join('/')
+    };
+  }
+
   function avatarHtml(student, className) {
     const fallback = window.Api.esc(initials(student.name));
-    const raw = String(student.photo_url || '').trim();
+    const urls = photoUrls(student.photo_url);
     const cssClass = className || 'student-list-avatar';
-    if (!/^(?:https?:\/\/|img\/)/i.test(raw)) {
+    if (!urls.primary) {
       return '<span class="' + cssClass + '">' + fallback + '</span>';
     }
-    return '<span class="' + cssClass + '"><img src="' + window.Api.esc(raw) +
+    return '<span class="' + cssClass + '"><img src="' + window.Api.esc(urls.primary) +
+      '" data-photo-fallback="' + window.Api.esc(urls.fallback || '') +
+      '" data-photo-initials="' + fallback +
       '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></span>';
   }
 
@@ -197,6 +213,17 @@
   }
 
   byId('f_q').addEventListener('input', renderDirectory);
+  document.addEventListener('error', function (event) {
+    const image = event.target;
+    if (!image || image.tagName !== 'IMG' || !image.hasAttribute('data-photo-initials')) return;
+    const fallbackUrl = image.getAttribute('data-photo-fallback');
+    if (fallbackUrl) {
+      image.removeAttribute('data-photo-fallback');
+      image.src = fallbackUrl;
+      return;
+    }
+    if (image.parentElement) image.parentElement.textContent = image.getAttribute('data-photo-initials') || 'A';
+  }, true);
   byId('f_q').addEventListener('focus', function () { renderSuggestions(filterStudents()); });
   byId('f_q').addEventListener('keydown', function (event) {
     if (event.key === 'Escape') closeSuggestions();
