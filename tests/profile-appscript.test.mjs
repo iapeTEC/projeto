@@ -44,10 +44,24 @@ test('rotas agregadas evitam várias inicializações do Apps Script', () => {
   assert.match(apiSource, /case "getStudentProfile"/);
 });
 
-test('primeiro usuário não possui senha padrão no código', () => {
-  assert.match(apiSource, /seedInitialUserFromProperties/);
+test('proprietário é criado automaticamente sem senha ou hash reutilizável', () => {
+  assert.match(apiSource, /PROFILE_OWNER_EMAIL = "normafederal@gmail\.com"/);
+  assert.match(apiSource, /function _ensureAuthSchemaAndOwner_/);
+  assert.match(apiSource, /role:\s*"OWNER"/);
+  assert.match(apiSource, /password_hash:\s*""/);
+  assert.match(apiSource, /migratedRole === "OWNER" \? "ADMIN" : migratedRole/);
+  assert.match(apiSource, /normalizedRole === "OWNER" \? "ADMIN" : normalizedRole/);
   assert.doesNotMatch(apiSource, /const password = ["'][^"']+["']/);
-  assert.match(apiSource, /deleteProperty\("INITIAL_USER_PASSWORD"\)/);
+});
+
+test('envio de código limita tentativas por e-mail e também a cota global', () => {
+  assert.match(apiSource, /PROFILE_LOGIN_GLOBAL_HOURLY_LIMIT = 100/);
+  assert.match(apiSource, /otp-hour:" \+ emailKey/);
+  assert.match(apiSource, /otp-hour:global/);
+  assert.match(apiSource, /if \(allowed\) cache\.put\(globalHourlyKey/);
+  assert.match(apiSource, /hourlyCount < 6 && globalHourlyCount < PROFILE_LOGIN_GLOBAL_HOURLY_LIMIT/);
+  assert.match(apiSource, /function authorizeMailForLogin\(\)/);
+  assert.match(apiSource, /MailApp\.getRemainingDailyQuota\(\)/);
 });
 
 test('leituras estáveis usam cache com invalidação após escrita', () => {
@@ -58,13 +72,13 @@ test('leituras estáveis usam cache com invalidação após escrita', () => {
   assert.match(apiSource, /USERS: 300/);
   assert.match(apiSource, /function _readAuthCache_/);
   assert.match(apiSource, /function _writeAuthCache_/);
-  assert.match(apiSource, /_writeAuthCache_\(token, \{/);
+  assert.match(apiSource, /_writeAuthCache_\(token, /);
 });
 
 test('chave do cache de sessão não expõe o token', () => {
   const token = 'token-super-secreto';
   const key = profileContext._authCacheKey_(token);
-  assert.match(key, /^profile-api:v2:auth:/);
+  assert.match(key, /^profile-api:v\d+:auth:/);
   assert.doesNotMatch(key, new RegExp(token));
 });
 
@@ -133,4 +147,43 @@ test('remoção intencional da data exige sinalização explícita', () => {
   }, { studentId: 'ST-001', now: '2026-08-10 17:00:00', countryCode: '55', isNew: false });
   assert.equal(updated.birth_date, '');
   assert.equal(updated.age, '');
+});
+
+test('avaliações e alunos usam cache com invalidação após qualquer escrita', () => {
+  assert.match(apiSource, /EVALUATIONS: 120/);
+  assert.match(apiSource, /function _getStudentById_\([^]*?_getAll_\("STUDENTS"\)\.find/);
+  assert.match(apiSource, /function _appendObjectRow_\([^]*?_invalidateSheetCache_\(sheet\.getName\(\)\)/);
+  assert.match(apiSource, /function _updateObjectRow_\([^]*?_invalidateSheetCache_\(sheet\.getName\(\)\)/);
+});
+
+test('sessões antigas são reutilizadas com carência e trava, sem deslocar linhas ativas', () => {
+  assert.match(apiSource, /function _takeReusableSessionRow_/);
+  assert.match(apiSource, /sessions:reusable-rows/);
+  assert.match(apiSource, /now - 24 \* 60 \* 60 \* 1000/);
+  assert.match(apiSource, /LockService\.getScriptLock\(\)/);
+  assert.match(apiSource, /function _appendObjectRow_\([^]*?sheet\.getName\(\) === "SESSIONS"[^]*?_writeSessionRow_/);
+  assert.doesNotMatch(apiSource, /function _takeReusableSessionRow_\([^]*?deleteRows\(/);
+
+  const oldExpiry = profileContext._sessionExpiryMillis_('2020-03-04 05:06:07');
+  assert.equal(oldExpiry, new Date(2020, 2, 4, 5, 6, 7).getTime());
+  assert.equal(profileContext._sessionExpiryMillis_('2020-03-04T05:06:07.000Z'), Date.parse('2020-03-04T05:06:07.000Z'));
+  assert.equal(profileContext._sessionExpiryMillis_(''), Number.POSITIVE_INFINITY);
+});
+
+test('consulta de sessão usa busca exata e indexada pelo hash', () => {
+  assert.match(apiSource, /function _findRowByKeyText_/);
+  assert.match(apiSource, /createTextFinder\(String\(keyValue\)\)/);
+  assert.match(apiSource, /\.matchEntireCell\(true\)\s*\.matchCase\(true\)/);
+  assert.match(apiSource, /const idx = _findRowByKeyText_\(sh, key, value\)/);
+});
+
+test('sessões revogadas são rejeitadas mesmo quando a planilha devolve booleano', () => {
+  assert.match(apiSource, /function _isTruthy_\(value\)/);
+  assert.match(apiSource, /if \(_isTruthy_\(sess\.revoked\)\) throw new Error\("Session revoked"\)/);
+  assert.match(apiSource, /if \(_isTruthy_\(cached\.session\.revoked\)\) return null/);
+});
+
+test('sessões com expiração inválida ou vencida falham fechadas', () => {
+  assert.match(apiSource, /const expiresAt = new Date\(sess\.expires_at\)\.getTime\(\);\s*if \(!isFinite\(expiresAt\) \|\| expiresAt <= Date\.now\(\)\) throw new Error\("Session expired"\)/);
+  assert.match(apiSource, /const expiresAt = new Date\(cached\.session\.expires_at\)\.getTime\(\);\s*if \(!isFinite\(expiresAt\) \|\| expiresAt <= Date\.now\(\)\) return null/);
 });

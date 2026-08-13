@@ -117,9 +117,13 @@ function setupScholarshipSystem() {
         "active",
         "last_login_at",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "email",
+        "auth_version",
+        "invited_by",
+        "invited_at"
       ],
-      widths: { 1: 140, 2: 200, 3: 260, 4: 100, 5: 80, 6: 150, 7: 150, 8: 150 },
+      widths: { 1: 140, 2: 220, 3: 120, 4: 100, 5: 80, 6: 150, 7: 150, 8: 150, 9: 240, 10: 100, 11: 220, 12: 150 },
       freezeRows: 1,
       filter: true
     },
@@ -133,9 +137,12 @@ function setupScholarshipSystem() {
         "expires_at",
         "revoked",
         "ip",
-        "user_agent"
+        "user_agent",
+        "session_id",
+        "token_hash",
+        "auth_version"
       ],
-      widths: { 1: 220, 2: 140, 3: 100, 4: 150, 5: 150, 6: 90, 7: 140, 8: 260 },
+      widths: { 1: 100, 2: 140, 3: 100, 4: 180, 5: 180, 6: 90, 7: 100, 8: 260, 9: 140, 10: 260, 11: 100 },
       freezeRows: 1,
       filter: true
     },
@@ -263,8 +270,7 @@ function seedSettings_(ss) {
     ["DEFAULT_COUNTRY_CODE", "55", "Código do país para WhatsApp (Brasil = 55)", nowIso_()],
     ["SESSION_DAYS", "7", "Dias para expiração de sessão", nowIso_()],
     ["NORM_SCORE_MAX", "10", "Nota máxima por competência", nowIso_()],
-    ["NORM_SCORE_TO_PERCENT", "10", "Multiplicador para converter 0-10 em 0-100 (10 = x10)", nowIso_()],
-    ["PASSWORD_SALT", "change-me", "Salt para hash de senha (trocar automaticamente no seedFirstEditor)", nowIso_()]
+    ["NORM_SCORE_TO_PERCENT", "10", "Multiplicador para converter 0-10 em 0-100 (10 = x10)", nowIso_()]
   ];
 
   const toAppend = defaults.filter(row => !existingSet.has(row[0]));
@@ -301,7 +307,7 @@ function applyValidations_(ss) {
   }
 
   if (users) {
-    setValidationByHeader_(users, "role", ["EDITOR", "VIEWER"]);
+    setValidationByHeader_(users, "role", ["OWNER", "ADMIN", "EDITOR", "USER"]);
     setValidationByHeader_(users, "active", ["TRUE", "FALSE"]);
   }
 }

@@ -2,7 +2,9 @@
 <html lang="pt-BR">
 <head>
  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="dns-prefetch" href="//script.google.com">
+  <link rel="dns-prefetch" href="//script.googleusercontent.com">
 <title>Visão geral • IAPE Gestão Estudantil</title>
 
 <meta charset="utf-8">
@@ -33,7 +35,7 @@
     </div>
     <div class="home-hero-actions no-print">
       <a class="btn btn-light-academic" href="students.html">Consultar alunos</a>
-      <a class="btn btn-glass" href="escolhersetores.html">Registrar frequência</a>
+      <a class="btn btn-glass" href="escolhersetores.html" id="heroAttendance">Registrar frequência</a>
     </div>
   </section>
 
@@ -69,11 +71,14 @@
     <a class="quick-action" href="students.html">
       <span class="quick-action-icon" aria-hidden="true">01</span><span><strong>Diretório de alunos</strong><small>Consulte perfis, contatos, setor e modalidade de bolsa.</small></span>
     </a>
-    <a class="quick-action" href="escolhersetores.html">
-      <span class="quick-action-icon" aria-hidden="true">02</span><span><strong>Frequência dos projetos</strong><small>Registre presenças, faltas e observações por projeto.</small></span>
+    <a class="quick-action" href="escolhersetores.html" id="btnAttendance">
+      <span class="quick-action-icon" aria-hidden="true">02</span><span><strong id="attendanceActionTitle">Frequência dos projetos</strong><small id="attendanceActionCopy">Registre presenças, faltas e observações por projeto.</small></span>
     </a>
     <a class="quick-action" href="editor.html" id="btnEditor" style="display:none;">
-      <span class="quick-action-icon" aria-hidden="true">03</span><span><strong>Gestão acadêmica</strong><small>Cadastre alunos, avaliações, setores e usuários.</small></span>
+      <span class="quick-action-icon" aria-hidden="true">03</span><span><strong>Gestão acadêmica</strong><small>Atualize alunos, avaliações e os cadastros permitidos ao seu perfil.</small></span>
+    </a>
+    <a class="quick-action" href="editor.html?tab=users" id="btnAccess" style="display:none;">
+      <span class="quick-action-icon" aria-hidden="true">04</span><span><strong>Acessos da plataforma</strong><small>Cadastre e-mails, defina funções e encerre sessões.</small></span>
     </a>
   </div>
 
@@ -90,12 +95,25 @@
   const user = window.UI.requireAuth();
   if(!user) return;
   window.UI.mountNav("home");
-  document.getElementById("roleBadge").textContent = user.role === "EDITOR" ? "Administrador" : "Consulta";
-  document.getElementById("welcomeTitle").textContent = "Olá, " + user.login + ".";
+  document.getElementById("roleBadge").textContent = window.UI.roleLabel(user.role);
+  document.getElementById("welcomeTitle").textContent = "Olá, " + user.email + ".";
 
-  if(user.role === "EDITOR"){
+  if(window.UI.can(window.UI.CAPABILITIES.EDIT_ACADEMIC, user)){
     document.getElementById("btnEditor").style.display = "flex";
   }
+  if(window.UI.can(window.UI.CAPABILITIES.MANAGE_ACCESS, user)){
+    document.getElementById("btnAccess").style.display = "flex";
+  }
+  if(!window.UI.can(window.UI.CAPABILITIES.RECORD_ATTENDANCE, user)){
+    document.getElementById("heroAttendance").href = "dashboard.html";
+    document.getElementById("heroAttendance").textContent = "Ver frequência";
+    document.getElementById("btnAttendance").href = "dashboard.html";
+    document.getElementById("attendanceActionTitle").textContent = "Dashboard de frequência";
+    document.getElementById("attendanceActionCopy").textContent = "Consulte presenças, faltas e indicadores por projeto.";
+  }
+
+  const notice = window.UI.consumeNotice();
+  if(notice) window.UI.toast(notice, "err");
 
   try{
     const data = await window.Api.apiPost("getHomeOverview", {});

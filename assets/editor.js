@@ -1,7 +1,9 @@
 (function () {
-  const user = window.UI.requireAuth(['EDITOR']);
+  const user = window.UI.requireCapability(window.UI.CAPABILITIES.EDIT_ACADEMIC);
   if (!user) return;
-  window.UI.mountNav('editor');
+  const canManageOrganization = window.UI.can(window.UI.CAPABILITIES.MANAGE_ORGANIZATION, user);
+  const canManageAccess = window.UI.can(window.UI.CAPABILITIES.MANAGE_ACCESS, user);
+  window.UI.mountNav(window.UI.getParam('tab') === 'users' && canManageAccess ? 'access' : 'editor');
 
   const byId = function (id) { return document.getElementById(id); };
   const state = {
@@ -9,9 +11,16 @@
     sectors: [],
     types: [],
     competencies: [],
+    users: [],
+    editingAccessEmail: '',
     selectedStudentId: '',
     requestedStudentId: window.UI.getParam('student_id') || ''
   };
+
+  document.querySelectorAll('[data-required-capability]').forEach(function (element) {
+    const capability = element.dataset.requiredCapability;
+    if (!window.UI.can(capability, user)) element.hidden = true;
+  });
 
   function normalize(value) {
     return String(value || '').toLocaleLowerCase('pt-BR')
@@ -78,13 +87,22 @@
   }
 
   function showPanel(name) {
+    const requested = Array.from(document.querySelectorAll('[data-editor-panel]')).find(function (panel) {
+      return panel.dataset.editorPanel === name;
+    });
+    if (!requested || (requested.dataset.requiredCapability && !window.UI.can(requested.dataset.requiredCapability, user))) {
+      name = 'students';
+    }
     document.querySelectorAll('[data-editor-tab]').forEach(function (button) {
-      const active = button.dataset.editorTab === name;
+      const allowed = !button.dataset.requiredCapability || window.UI.can(button.dataset.requiredCapability, user);
+      const active = allowed && button.dataset.editorTab === name;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-selected', active ? 'true' : 'false');
+      if (!allowed) button.hidden = true;
     });
     document.querySelectorAll('[data-editor-panel]').forEach(function (panel) {
-      const active = panel.dataset.editorPanel === name;
+      const allowed = !panel.dataset.requiredCapability || window.UI.can(panel.dataset.requiredCapability, user);
+      const active = allowed && panel.dataset.editorPanel === name;
       panel.classList.toggle('is-active', active);
       panel.hidden = !active;
     });
@@ -325,6 +343,10 @@
     state.competencies = (data.competencies || []).filter(function (item) {
       return String(item.active || 'TRUE').toUpperCase() === 'TRUE';
     });
+    if (canManageAccess && Array.isArray(data.users)) {
+      state.users = data.users.slice();
+      renderUsers();
+    }
 
     fillSelect(byId('st_sector'), state.sectors, 'sector_id', 'name', 'Sem setor');
     fillSelect(byId('st_type'), state.types, 'type_id', 'name', 'Sem bolsa');
@@ -562,24 +584,194 @@
   bindCatalogAction('btnAddComp', 'new_comp_name', 'upsertCompetency',
     function (name) { return { competency: { name: name, weight: '1' } }; }, 'Competência adicionada.');
 
-  byId('btnCreateViewer').addEventListener('click', async function () {
-    const login = byId('vw_login').value.trim();
-    const password = byId('vw_password').value;
-    if (!login || password.length < 8) {
-      window.UI.toast('Informe o usuário e uma senha com pelo menos 8 caracteres.', 'err');
+  function accessIsActive(account) {
+    if (account && typeof account.active === 'boolean') return account.active;
+    return String(account && account.active === undefined ? 'TRUE' : account.active).toUpperCase() !== 'FALSE';
+  }
+
+  function formatLastAccess(value) {
+    if (!value) return 'Nunca acessou';
+    const parsed = new Date(String(value).replace(' ', 'T'));
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  }
+
+  function resetAccessForm() {
+    if (!canManageAccess) return;
+    state.editingAccessEmail = '';
+    byId('accessForm').reset();
+    byId('access_email').readOnly = false;
+    byId('access_active').checked = true;
+    byId('accessFormTitle').textContent = 'Autorizar novo e-mail';
+    byId('btnSaveAccess').textContent = 'Autorizar e-mail';
+    byId('btnCancelAccessEdit').hidden = true;
+  }
+
+  function editAccess(account) {
+    if (!canManageAccess || String(account.role || '').toUpperCase() === 'OWNER') return;
+    state.editingAccessEmail = String(account.email || '').toLowerCase();
+    byId('access_email').value = state.editingAccessEmail;
+    byId('access_email').readOnly = true;
+    byId('access_role').value = String(account.role || 'USER').toUpperCase();
+    byId('access_active').checked = accessIsActive(account);
+    byId('accessFormTitle').textContent = 'Editar acesso';
+    byId('btnSaveAccess').textContent = 'Salvar alterações';
+    byId('btnCancelAccessEdit').hidden = false;
+    byId('accessForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  async function refreshUsers(force) {
+    if (!canManageAccess) return;
+    const data = await window.Api.apiPost('listUsers', {}, { noCache: !!force });
+    state.users = (data.users || []).slice();
+    renderUsers();
+  }
+
+  async function saveAccess(account, button, message) {
+    await runWithButton(button, 'Salvando…', message || 'Atualizando o acesso…', function () {
+      return window.Api.apiPost('upsertUser', { user: account });
+    });
+    await refreshUsers(true);
+  }
+
+  function actionButton(label, className, handler, ariaLabel) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm ' + className;
+    button.textContent = label;
+    if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
+    button.addEventListener('click', handler);
+    return button;
+  }
+
+  function renderUsers() {
+    if (!canManageAccess) return;
+    const body = byId('accessTableBody');
+    const users = state.users.slice().sort(function (a, b) {
+      const ownerOrder = (String(b.role).toUpperCase() === 'OWNER' ? 1 : 0) -
+        (String(a.role).toUpperCase() === 'OWNER' ? 1 : 0);
+      return ownerOrder || String(a.email || '').localeCompare(String(b.email || ''), 'pt-BR');
+    });
+    byId('accessListSummary').textContent = users.length === 1
+      ? '1 e-mail cadastrado.' : users.length + ' e-mails cadastrados.';
+    body.textContent = '';
+
+    if (!users.length) {
+      const row = document.createElement('tr');
+      row.innerHTML = '<td colspan="5"><div class="editor-list-empty">Nenhum acesso cadastrado.</div></td>';
+      body.appendChild(row);
       return;
     }
-    try {
-      await runWithButton(byId('btnCreateViewer'), 'Criando…', 'Criando o acesso de consulta…', function () {
-        return window.Api.apiPost('createUser', { user: { login: login, password: password, role: 'VIEWER' } });
-      });
-      byId('vw_login').value = '';
-      byId('vw_password').value = '';
-      window.UI.toast('Usuário criado com sucesso.', 'ok');
-    } catch (error) {
-      window.UI.toast(error.message || String(error), 'err');
-    }
-  });
+
+    users.forEach(function (account) {
+      const role = String(account.role || 'USER').toUpperCase();
+      const isOwner = role === 'OWNER';
+      const active = accessIsActive(account);
+      const row = document.createElement('tr');
+      if (!active) row.className = 'access-row-inactive';
+
+      const emailCell = document.createElement('td');
+      const email = document.createElement('strong');
+      email.textContent = account.email || 'E-mail não informado';
+      emailCell.appendChild(email);
+      if (isOwner) {
+        const protectedLabel = document.createElement('small');
+        protectedLabel.className = 'd-block text-muted';
+        protectedLabel.textContent = 'Conta protegida do responsável de TI';
+        emailCell.appendChild(protectedLabel);
+      }
+
+      const roleCell = document.createElement('td');
+      roleCell.textContent = window.UI.roleLabel(role);
+      const statusCell = document.createElement('td');
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + (active ? 'text-bg-success' : 'text-bg-secondary');
+      badge.textContent = active ? 'Ativo' : 'Inativo';
+      statusCell.appendChild(badge);
+      const lastAccessCell = document.createElement('td');
+      lastAccessCell.textContent = formatLastAccess(account.last_login_at);
+
+      const actionsCell = document.createElement('td');
+      actionsCell.className = 'text-end';
+      const actions = document.createElement('div');
+      actions.className = 'access-row-actions';
+      if (isOwner) {
+        const locked = document.createElement('span');
+        locked.className = 'small text-muted';
+        locked.textContent = 'Protegido';
+        actions.appendChild(locked);
+      } else {
+        actions.appendChild(actionButton('Editar', 'btn-outline-primary', function () {
+          editAccess(account);
+        }, 'Editar acesso de ' + account.email));
+        actions.appendChild(actionButton(active ? 'Desativar' : 'Ativar', 'btn-outline-secondary', async function (event) {
+          if (active && !window.confirm('Desativar o acesso de ' + account.email + ' e encerrar as sessões abertas?')) return;
+          try {
+            await saveAccess({ email: account.email, role: role, active: !active }, event.currentTarget,
+              active ? 'Desativando o acesso…' : 'Ativando o acesso…');
+            if (active && account.user_id) {
+              await window.Api.apiPost('revokeUserSessions', { user_id: account.user_id });
+            }
+            resetAccessForm();
+            window.UI.toast(active ? 'Acesso desativado.' : 'Acesso ativado.', 'ok');
+          } catch (error) {
+            window.UI.toast(error.message || String(error), 'err');
+          }
+        }, (active ? 'Desativar ' : 'Ativar ') + account.email));
+        actions.appendChild(actionButton('Encerrar sessões', 'btn-outline-danger', async function (event) {
+          if (!account.user_id || !window.confirm('Encerrar todas as sessões de ' + account.email + '?')) return;
+          try {
+            await runWithButton(event.currentTarget, 'Encerrando…', 'Revogando as sessões deste acesso…', function () {
+              return window.Api.apiPost('revokeUserSessions', { user_id: account.user_id });
+            });
+            window.UI.toast('Sessões encerradas com sucesso.', 'ok');
+          } catch (error) {
+            window.UI.toast(error.message || String(error), 'err');
+          }
+        }, 'Encerrar sessões de ' + account.email));
+      }
+      actionsCell.appendChild(actions);
+      row.append(emailCell, roleCell, statusCell, lastAccessCell, actionsCell);
+      body.appendChild(row);
+    });
+  }
+
+  if (canManageAccess) {
+    byId('accessForm').addEventListener('submit', async function (event) {
+      event.preventDefault();
+      const emailInput = byId('access_email');
+      const email = emailInput.value.trim().toLowerCase();
+      const role = byId('access_role').value;
+      if (!email || !emailInput.checkValidity()) {
+        emailInput.reportValidity();
+        return;
+      }
+      if (['ADMIN', 'EDITOR', 'USER'].indexOf(role) === -1) {
+        window.UI.toast('Selecione uma função válida.', 'err');
+        return;
+      }
+      try {
+        const wasEditing = !!state.editingAccessEmail;
+        await saveAccess({ email: email, role: role, active: byId('access_active').checked },
+          byId('btnSaveAccess'), wasEditing ? 'Salvando as alterações…' : 'Autorizando o novo e-mail…');
+        resetAccessForm();
+        window.UI.toast(wasEditing ? 'Acesso atualizado.' : 'E-mail autorizado com sucesso.', 'ok');
+      } catch (error) {
+        window.UI.toast(error.message || String(error), 'err');
+      }
+    });
+    byId('btnCancelAccessEdit').addEventListener('click', resetAccessForm);
+    byId('btnRefreshUsers').addEventListener('click', async function (event) {
+      try {
+        await runWithButton(event.currentTarget, 'Atualizando…', 'Atualizando os acessos…', function () {
+          return refreshUsers(true);
+        });
+        window.UI.toast('Lista de acessos atualizada.', 'ok');
+      } catch (error) {
+        window.UI.toast(error.message || String(error), 'err');
+      }
+    });
+  }
 
   byId('btnRefresh').addEventListener('click', async function () {
     try {
@@ -594,6 +786,7 @@
 
   byId('ev_date').value = todayIso();
   renderScores();
+  showPanel(window.UI.getParam('tab') || 'students');
   refreshData(false).catch(function (error) {
     byId('studentEditorList').innerHTML = '<div class="editor-list-empty">Não foi possível carregar os alunos.</div>';
     window.UI.toast(error.message || String(error), 'err');

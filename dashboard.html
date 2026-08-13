@@ -5,66 +5,96 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#12365d">
   <title>Indicadores de frequência • IAPE</title>
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+  <link rel="dns-prefetch" href="//script.google.com">
+  <link rel="dns-prefetch" href="//script.googleusercontent.com">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="icons/site.webmanifest">
   <link rel="stylesheet" href="assets/attendance.css">
+  <script src="assets/config.js"></script>
   <script src="assets/config2.js"></script>
   <script src="assets/loading.js"></script>
+  <script src="assets/api.js"></script>
+  <script src="assets/ui.js"></script>
   <script src="assets/attendance-api.js"></script>
 </head>
 <body>
   <main class="shell">
     <nav class="topnav" aria-label="Navegação principal">
-      <a class="brand" href="escolhersetores.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 10.5 16 5l11 5.5L16 16 5 10.5Z" fill="currentColor"/><path d="M9 14v7.2c4.3 3.4 9.7 3.4 14 0V14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M27 11v8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span><span class="brand-copy"><strong>IAPE</strong><small>Gestão Estudantil</small></span></a>
+      <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 10.5 16 5l11 5.5L16 16 5 10.5Z" fill="currentColor"/><path d="M9 14v7.2c4.3 3.4 9.7 3.4 14 0V14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M27 11v8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span><span class="brand-copy"><strong>IAPE</strong><small>Gestão Estudantil</small></span></a>
       <div class="nav-links">
-        <a class="nav-link" href="escolhersetores.html">Chamadas</a>
-        <a class="nav-link is-active" href="dashboard.html">Dashboard</a>
-        <a class="nav-link" href="login.html">Perfis</a>
+        <a class="nav-link" href="index.html">Visão geral</a>
+        <a class="nav-link" href="escolhersetores.html" data-required-capability="attendance:record">Setores e chamadas</a>
+        <a class="nav-link is-active" href="dashboard.html">Faltas</a>
+        <div id="attendanceAccount"></div>
       </div>
     </nav>
 
     <header class="hero">
       <div>
-        <p class="eyebrow">Visão geral</p>
-        <h1>Dashboard de frequência</h1>
-        <p class="lead">Acompanhe presenças, faltas e observações por período e projeto.</p>
+        <p class="eyebrow">Acompanhamento ativo</p>
+        <h1>Frequência sem perder<br>ninguém de vista</h1>
+        <p class="lead">Encontre rapidamente os alunos que mais faltam, veja o setor responsável e prepare a conversa de acompanhamento.</p>
       </div>
-      <span class="summary-chip" id="last-updated">Aguardando atualização</span>
+      <div class="hero-aside no-print">
+        <span class="summary-chip" id="last-updated">Aguardando atualização</span>
+        <div class="hero-actions">
+          <a class="btn btn-quiet" href="index.html">Visão geral</a>
+          <a class="btn btn-primary" href="escolhersetores.html" data-required-capability="attendance:record">Fazer chamada</a>
+        </div>
+      </div>
     </header>
 
     <div id="dashboard-status" class="status" role="status" aria-live="polite"></div>
 
     <section class="panel no-print">
-      <div class="panel-body toolbar">
+      <div class="panel-body toolbar dashboard-toolbar">
+        <div class="field"><label for="period-preset">Período rápido</label><select id="period-preset"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="month">Este mês</option><option value="custom">Personalizado</option></select></div>
         <div class="field"><label for="start-date">Data inicial</label><input type="date" id="start-date"></div>
         <div class="field"><label for="end-date">Data final</label><input type="date" id="end-date"></div>
-        <div class="field"><label for="project-filter">Projeto</label><select id="project-filter"></select></div>
-        <button class="btn btn-primary" id="refresh-dashboard" type="button">Atualizar</button>
-        <button class="btn btn-quiet" id="print-absences" type="button">Imprimir faltas</button>
+        <div class="field"><label for="project-filter">Setor ou projeto</label><select id="project-filter"></select></div>
+        <div class="field field-compact"><label for="absence-threshold">Sinalizar a partir de</label><select id="absence-threshold"><option value="1">1 falta</option><option value="2">2 faltas</option><option value="3" selected>3 faltas</option><option value="5">5 faltas</option><option value="10">10 faltas</option></select></div>
+        <div class="toolbar-actions"><button class="btn btn-primary" id="refresh-dashboard" type="button">Aplicar filtros</button><button class="btn btn-quiet" id="print-absences" type="button">Imprimir relatório</button></div>
       </div>
     </section>
 
     <section class="metric-grid" aria-label="Indicadores">
       <article class="metric"><div class="metric-label">Lançamentos</div><div class="metric-value" id="metric-total">0</div></article>
       <article class="metric"><div class="metric-label">Presentes</div><div class="metric-value" id="metric-present">0</div></article>
-      <article class="metric"><div class="metric-label">Faltas</div><div class="metric-value" id="metric-absent">0</div></article>
+      <article class="metric metric-danger"><div class="metric-label">Faltas</div><div class="metric-value" id="metric-absent">0</div></article>
       <article class="metric"><div class="metric-label">Frequência</div><div class="metric-value" id="metric-percent">0%</div></article>
-      <article class="metric"><div class="metric-label">Observações</div><div class="metric-value" id="metric-observations">0</div></article>
+      <article class="metric metric-attention"><div class="metric-label" id="metric-attention-label">Com 3+ faltas</div><div class="metric-value" id="metric-at-risk">0</div></article>
+      <article class="metric"><div class="metric-label">Setores com faltas</div><div class="metric-value" id="metric-sectors">0</div></article>
     </section>
 
-    <section class="panel" style="margin-bottom:16px">
-      <div class="panel-header"><h2>Resumo por projeto</h2></div>
-      <div class="panel-body table-wrap"><table class="data-table" id="summary-table"><thead><tr><th>Projeto</th><th>Total</th><th>Presentes</th><th>Faltas</th><th>Observações</th><th>Frequência</th></tr></thead><tbody></tbody></table></div>
+    <section class="panel dashboard-section" id="attention-section" aria-labelledby="attention-title">
+      <div class="panel-header">
+        <div class="panel-heading-copy"><p class="eyebrow">Prioridade de contato</p><h2 id="attention-title">Alunos que precisam de atenção</h2><p>Ordenados pelo maior número de faltas no período.</p></div>
+        <span class="summary-chip" id="attention-count">0 alunos</span>
+      </div>
+      <div class="panel-body">
+        <div class="attention-tools no-print"><div class="field search"><label for="student-risk-search">Localizar aluno</label><input type="search" id="student-risk-search" placeholder="Digite o nome…" autocomplete="off"></div><p class="muted small" id="attention-hint"></p></div>
+        <div id="attention-list" class="attention-list" aria-live="polite"><div class="empty">Carregando o ranking de faltas…</div></div>
+      </div>
     </section>
 
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">
+    <section class="panel dashboard-section" id="sectors-section" aria-labelledby="sectors-title">
+      <div class="panel-header">
+        <div class="panel-heading-copy"><p class="eyebrow">Navegação rápida</p><h2 id="sectors-title">Faltas por setor</h2><p>Clique em um setor para ver somente os alunos dele.</p></div>
+        <button class="btn btn-quiet no-print hidden" id="show-all-sectors" type="button">Ver todos</button>
+      </div>
+      <div class="panel-body"><div id="sector-overview" class="sector-overview-grid" aria-live="polite"><div class="empty">Carregando os setores…</div></div></div>
+    </section>
+
+    <div class="grid dashboard-detail-grid">
       <section class="panel">
-        <div class="panel-header"><h2>Observações recentes</h2><span class="muted small">Até 8</span></div>
-        <div class="panel-body table-wrap"><table class="data-table" id="observations-table"><thead><tr><th>Data</th><th>Projeto</th><th>Aluno</th><th>Observação</th></tr></thead><tbody></tbody></table></div>
+        <div class="panel-header"><div class="panel-heading-copy"><h2>Faltas recentes</h2><p>Últimos registros dentro dos filtros.</p></div><span class="muted small">Até 20</span></div>
+        <div class="panel-body table-wrap"><table class="data-table" id="rows-table"><thead><tr><th>Data</th><th>Setor</th><th>Aluno</th><th>Responsável</th><th>Observação</th></tr></thead><tbody></tbody></table></div>
       </section>
       <section class="panel">
-        <div class="panel-header"><h2>Lançamentos recentes</h2><span class="muted small">Até 20</span></div>
-        <div class="panel-body table-wrap"><table class="data-table" id="rows-table"><thead><tr><th>Data</th><th>Projeto</th><th>Responsável</th><th>Aluno</th><th>Presença</th><th>Origem</th></tr></thead><tbody></tbody></table></div>
+        <div class="panel-header"><div class="panel-heading-copy"><h2>Observações recentes</h2><p>Informações registradas nas chamadas.</p></div><span class="muted small">Até 8</span></div>
+        <div class="panel-body table-wrap"><table class="data-table" id="observations-table"><thead><tr><th>Data</th><th>Setor</th><th>Aluno</th><th>Observação</th></tr></thead><tbody></tbody></table></div>
       </section>
     </div>
   </main>

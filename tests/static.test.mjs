@@ -50,6 +50,73 @@ test('editor seleciona alunos sem expor ID ou usar modais aninhados', async () =
   assert.match(script, /clear_birth_date/);
 });
 
+test('login passwordless usa e-mail, código temporário e sessão por aba', async () => {
+  const html = await readFile(resolve(root, 'login.html'), 'utf8');
+  const api = await readFile(resolve(root, 'assets/api.js'), 'utf8');
+  assert.match(html, /id="email"[^>]+type="email"/);
+  assert.match(html, /id="loginCode"[^>]+autocomplete="one-time-code"/);
+  assert.match(html, /apiPost\('requestLoginCode', \{ email: email \}\)/);
+  assert.match(html, /apiPost\('verifyLoginCode', payload\)/);
+  assert.doesNotMatch(html, /type="password"|current-password|apiPost\(["']login["']/);
+  assert.match(api, /sessionStorage\.setItem\(key, value\)/);
+  assert.match(api, /localStorage\.removeItem\(SESSION_KEYS\[name\]\)/);
+  assert.doesNotMatch(api, /localStorage\.setItem\(/);
+  assert.match(api, /user_id \|\| user\.email/);
+  assert.match(api, /handleAuthFailure/);
+});
+
+test('RBAC expõe quatro papéis e gestão de acesso somente ao proprietário', async () => {
+  const html = await readFile(resolve(root, 'editor.html'), 'utf8');
+  const editor = await readFile(resolve(root, 'assets/editor.js'), 'utf8');
+  const ui = await readFile(resolve(root, 'assets/ui.js'), 'utf8');
+  for (const role of ['OWNER', 'ADMIN', 'EDITOR', 'USER']) assert.match(ui, new RegExp(`${role}: '${role}'`));
+  assert.match(ui, /MANAGE_ACCESS: 'access:manage'/);
+  assert.match(ui, /OWNER: Object\.values\(CAPABILITIES\)/);
+  assert.match(editor, /requireCapability\(window\.UI\.CAPABILITIES\.EDIT_ACADEMIC\)/);
+  assert.match(html, /data-editor-tab="users" data-required-capability="access:manage"/);
+  assert.match(html, /id="access_email" type="email"/);
+  assert.match(html, /value="ADMIN"/);
+  assert.match(html, /value="EDITOR"/);
+  assert.match(html, /value="USER"/);
+  assert.doesNotMatch(html, /value="OWNER"/);
+  assert.match(editor, /apiPost\('listUsers'/);
+  assert.match(editor, /apiPost\('upsertUser'/);
+  assert.match(editor, /apiPost\('revokeUserSessions'/);
+});
+
+test('módulo de frequência preserva APIs separadas e envia sessão em POST', async () => {
+  const profileConfig = await readFile(resolve(root, 'assets/config.js'), 'utf8');
+  const attendanceConfig = await readFile(resolve(root, 'assets/config2.js'), 'utf8');
+  const attendanceApi = await readFile(resolve(root, 'assets/attendance-api.js'), 'utf8');
+  assert.match(profileConfig, /window\.PROFILE_APP_CONFIG/);
+  assert.match(attendanceConfig, /window\.ATTENDANCE_APP_CONFIG/);
+  assert.match(attendanceApi, /window\.ATTENDANCE_APP_CONFIG/);
+  assert.match(attendanceApi, /method: 'POST'/);
+  assert.match(attendanceApi, /\{ token: session\.token \}/);
+
+  for (const name of ['dashboard.html', 'escolhersetores.html', 'chamada.html']) {
+    const html = await readFile(resolve(root, name), 'utf8');
+    assert.match(html, /assets\/config\.js/);
+    assert.match(html, /assets\/config2\.js/);
+    assert.match(html, /assets\/api\.js/);
+    assert.match(html, /assets\/ui\.js/);
+    assert.match(html, /id="attendance(?:-account|Account)"/);
+  }
+  const dashboard = await readFile(resolve(root, 'assets/dashboard.js'), 'utf8');
+  const sectors = await readFile(resolve(root, 'escolhersetores.html'), 'utf8');
+  const attendance = await readFile(resolve(root, 'chamada.html'), 'utf8');
+  assert.match(dashboard, /CAPABILITIES\.VIEW_ATTENDANCE/);
+  assert.match(sectors, /CAPABILITIES\.RECORD_ATTENDANCE/);
+  assert.match(attendance, /CAPABILITIES\.RECORD_ATTENDANCE/);
+});
+
+test('perfil e relatório interrompem a execução sem usuário autenticado', async () => {
+  for (const name of ['student.html', 'sponsor.html']) {
+    const html = await readFile(resolve(root, name), 'utf8');
+    assert.match(html, /const user = window\.UI\.requireAuth\(\);\s*if\s*\(!user\) return;/);
+  }
+});
+
 test('diretório oferece busca de alunos instantânea fora dos filtros', async () => {
   const html = await readFile(resolve(root, 'students.html'), 'utf8');
   const script = await readFile(resolve(root, 'assets/students.js'), 'utf8');
@@ -79,6 +146,23 @@ test('solicitações exibem barra, spinner, mensagem e estado ocupado', async ()
   assert.match(attendanceApi, /REQUEST_TIMEOUT_MS = 90000/);
   assert.match(profileApi, /Continuamos tentando/);
   assert.match(attendanceApi, /Continuamos tentando/);
+});
+
+test('dashboard prioriza alunos com faltas e permite filtrar setores rapidamente', async () => {
+  const html = await readFile(resolve(root, 'dashboard.html'), 'utf8');
+  const script = await readFile(resolve(root, 'assets/dashboard.js'), 'utf8');
+  assert.match(html, /id="attention-list"/);
+  assert.match(html, /id="sector-overview"/);
+  assert.match(html, /id="absence-threshold"/);
+  assert.match(html, /id="attendanceAccount"/);
+  assert.match(script, /requireCapability\(window\.UI\.CAPABILITIES\.VIEW_ATTENDANCE\)/);
+  assert.match(script, /mountAttendanceAccount\('attendanceAccount', user\)/);
+  assert.match(script, /rankingAlunos/);
+  assert.match(script, /function selectProject\(/);
+  assert.match(script, /function dataForProject\(/);
+  assert.match(script, /if \(state\.allData\) render\(dataForProject/);
+  assert.match(script, /function buildPrintReport\(/);
+  assert.match(script, /AttendanceApi\.getDashboard\(filters/);
 });
 
 test('páginas principais não apontam para arquivos locais inexistentes', async () => {

@@ -6,7 +6,9 @@
   <meta name="theme-color" content="#12365d">
   <title>Gestão acadêmica • IAPE</title>
   <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="dns-prefetch" href="//script.google.com">
+  <link rel="dns-prefetch" href="//script.googleusercontent.com">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="assets/app.css">
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
@@ -40,8 +42,8 @@
     <nav class="editor-tabs no-print" aria-label="Áreas da gestão" role="tablist">
       <button class="editor-tab is-active" type="button" role="tab" aria-selected="true" data-editor-tab="students">Alunos</button>
       <button class="editor-tab" type="button" role="tab" aria-selected="false" data-editor-tab="evaluations">Avaliações</button>
-      <button class="editor-tab" type="button" role="tab" aria-selected="false" data-editor-tab="organization">Setores e bolsas</button>
-      <button class="editor-tab" type="button" role="tab" aria-selected="false" data-editor-tab="users">Acessos</button>
+      <button class="editor-tab" type="button" role="tab" aria-selected="false" data-editor-tab="organization" data-required-capability="organization:manage">Setores e bolsas</button>
+      <button class="editor-tab" type="button" role="tab" aria-selected="false" data-editor-tab="users" data-required-capability="access:manage">Acessos</button>
     </nav>
 
     <section class="editor-panel is-active" data-editor-panel="students" aria-label="Edição de alunos">
@@ -176,7 +178,7 @@
       </div>
     </section>
 
-    <section class="editor-panel" data-editor-panel="organization" aria-label="Setores e bolsas" hidden>
+    <section class="editor-panel" data-editor-panel="organization" data-required-capability="organization:manage" aria-label="Setores e bolsas" hidden>
       <div class="editor-content-grid">
         <section class="card">
           <div class="card-header"><strong>Alterar setor de um aluno</strong></div>
@@ -223,27 +225,56 @@
       </div>
     </section>
 
-    <section class="editor-panel" data-editor-panel="users" aria-label="Acessos" hidden>
-      <section class="card editor-narrow-card">
-        <div class="card-header"><strong>Criar acesso de consulta</strong></div>
-        <div class="card-body">
-          <p class="small-muted">Este usuário poderá consultar perfis e relatórios, mas não poderá alterar dados.</p>
-          <div class="row g-3">
-            <div class="col-12 col-md-6">
-              <label class="form-label" for="vw_login">Usuário</label>
-              <input class="form-control" id="vw_login" autocomplete="username" placeholder="Ex.: diretor1">
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label" for="vw_password">Senha temporária</label>
-              <input class="form-control" id="vw_password" type="password" minlength="8" autocomplete="new-password" placeholder="Mínimo de 8 caracteres">
-            </div>
+    <section class="editor-panel" data-editor-panel="users" data-required-capability="access:manage" aria-label="Acessos" hidden>
+      <div class="access-workspace">
+        <section class="card access-form-card">
+          <div class="card-header">
+            <strong id="accessFormTitle">Autorizar novo e-mail</strong>
           </div>
-          <input id="vw_role" type="hidden" value="VIEWER">
-          <div class="editor-form-actions">
-            <button class="btn btn-navy" id="btnCreateViewer" type="button">Criar usuário</button>
+          <div class="card-body">
+            <p class="small-muted">A pessoa receberá um código temporário no e-mail cadastrado. Não há senha para criar ou compartilhar.</p>
+            <form id="accessForm" autocomplete="off">
+              <div class="row g-3">
+                <div class="col-12 col-lg-5">
+                  <label class="form-label" for="access_email">E-mail</label>
+                  <input class="form-control" id="access_email" type="email" autocomplete="off" placeholder="pessoa@exemplo.com" required>
+                </div>
+                <div class="col-12 col-md-7 col-lg-4">
+                  <label class="form-label" for="access_role">Função</label>
+                  <select class="form-select" id="access_role" required>
+                    <option value="USER">Usuário — somente consulta</option>
+                    <option value="EDITOR">Editor — altera dados acadêmicos</option>
+                    <option value="ADMIN">Administrador — gestão completa</option>
+                  </select>
+                </div>
+                <div class="col-12 col-md-5 col-lg-3 d-flex align-items-end">
+                  <div class="form-check access-active-check">
+                    <input class="form-check-input" id="access_active" type="checkbox" checked>
+                    <label class="form-check-label" for="access_active">Acesso ativo</label>
+                  </div>
+                </div>
+              </div>
+              <div class="editor-form-actions">
+                <button class="btn btn-outline-secondary" id="btnCancelAccessEdit" type="button" hidden>Cancelar edição</button>
+                <button class="btn btn-navy" id="btnSaveAccess" type="submit">Autorizar e-mail</button>
+              </div>
+            </form>
           </div>
-        </div>
-      </section>
+        </section>
+
+        <section class="card">
+          <div class="card-header d-flex justify-content-between align-items-center gap-2">
+            <div><strong>E-mails autorizados</strong><div class="small-muted" id="accessListSummary">Carregando acessos…</div></div>
+            <button class="btn btn-sm btn-outline-primary" id="btnRefreshUsers" type="button">Atualizar</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table align-middle access-table mb-0">
+              <thead><tr><th>E-mail</th><th>Função</th><th>Status</th><th>Último acesso</th><th class="text-end">Ações</th></tr></thead>
+              <tbody id="accessTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </section>
   </main>
 

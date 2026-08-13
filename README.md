@@ -6,12 +6,13 @@ Plataforma acadêmica para acompanhar alunos, bolsas, setores, avaliações, pro
 
 ## Recursos
 
-- Autenticação com perfis de administrador e consulta.
+- Acesso sem senha por e-mail e código temporário.
+- Papéis de proprietário/TI, administrador, editor e usuário.
 - Diretório de alunos com filtros, contato e perfil individual.
 - Avaliações formativas, histórico de evolução e relatórios para impressão.
 - Gestão de setores, bolsas, competências e usuários.
 - Lista de chamada com presença, falta e observação.
-- Dashboard de frequência por período e projeto.
+- Dashboard de faltas com ranking de alunos, setores clicáveis e relatório para impressão.
 - Interface responsiva e instalável como PWA.
 - Barra de progresso, spinner, mensagem da operação e bloqueio do botão durante todas as solicitações.
 
@@ -21,10 +22,10 @@ O sistema possui dois Apps Scripts independentes. Essa separação foi mantida p
 
 | Módulo | Configuração do frontend | Código versionado | Deploy atual |
 | --- | --- | --- | --- |
-| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | versão 11 |
-| Frequência e dashboard | `assets/config2.js` | `appscript/Code.gs` | versão 6 |
+| Perfis, login e avaliações | `assets/config.js` | `appscript/projeto7/Api.js` e `Código.js` | URL definida no config |
+| Frequência e dashboard | `assets/config2.js` | `appscript/Code.gs` | URL definida no config |
 
-As duas URLs existentes foram preservadas durante a atualização. O código foi publicado sobre as implantações atuais, evitando quebrar favoritos ou links já distribuídos.
+O frontend usa apenas as URLs estáveis terminadas em `/exec`. URLs temporárias de `script.googleusercontent.com/macros/echo` nunca devem ser copiadas para os arquivos de configuração.
 
 ```text
 projeto/
@@ -66,6 +67,8 @@ As telas continuam sujeitas ao tempo de inicialização a frio do Apps Script, m
 - Projetos e listas de chamada ficam em cache por cinco minutos.
 - A substituição de uma chamada remove blocos contíguos de linhas, em vez de apagar uma linha por aluno.
 - O dashboard calcula métricas e resumos em uma passagem e mantém um cache curto por filtro.
+- A troca entre setores no dashboard usa o resultado já carregado, sem esperar uma nova chamada ao Google.
+- Configurações e clientes da API usam atualização pela rede no service worker, evitando JavaScript antigo após uma publicação.
 - As 173 fotos possuem versões WebP de 128 px. O conjunto usado nos avatares caiu de aproximadamente 38,7 MB para 315 KB.
 - As antigas páginas duplicadas de setores redirecionam para uma única tela parametrizada.
 
@@ -81,6 +84,22 @@ A identidade visual foi refeita para apresentar o sistema como uma plataforma ac
 - layout adaptado para desktop e celular;
 - feedback visual imediato para carregamentos e envios demorados.
 - editor acadêmico em fluxo mestre-detalhe, sem janelas sobrepostas, com pesquisa por aluno, setor ou bolsa.
+- painel de faltas com prioridade de contato, busca por aluno, filtros rápidos, cartões de setor e relatório impresso.
+
+## Acesso e papéis
+
+O login não usa senha. A pessoa informa um e-mail previamente autorizado e recebe um código de seis dígitos, válido por dez minutos. A sessão fica somente na aba atual do navegador e o token é armazenado como hash na planilha.
+
+O proprietário inicial é `normafederal@gmail.com`. Ele é criado automaticamente e de forma idempotente na primeira solicitação de código. Na área **Gestão → Acessos**, somente esse proprietário pode cadastrar e-mails, alterar papéis, ativar/desativar contas e revogar sessões.
+
+| Papel | Permissões |
+| --- | --- |
+| `OWNER` | TI/proprietário: todos os recursos e gestão de acessos |
+| `ADMIN` | Gestão acadêmica, configurações, chamadas e relatórios |
+| `EDITOR` | Edição acadêmica, chamadas e relatórios |
+| `USER` | Consultas, perfis e dashboard de faltas |
+
+Na primeira publicação que inclui o envio de código, o proprietário do Apps Script deve selecionar e executar `authorizeMailForLogin()` uma vez no editor. A função abre o consentimento do `MailApp`, confirma a cota e não envia mensagem.
 
 ## Apps Script
 
@@ -92,7 +111,7 @@ O backend lê estas propriedades privadas em **Configurações do projeto → Pr
 - `SOURCE_ROSTER_SPREADSHEET_ID`
 - `ADMIN_TOKEN` (opcional, recomendado para a ação administrativa via HTTP)
 
-Os IDs usados pela implantação foram migrados para as propriedades do Apps Script e não ficam no código público.
+`SOURCE_ROSTER_SPREADSHEET_ID` deve apontar para a mesma planilha que contém `STUDENTS`, `SECTORS`, `USERS` e `SESSIONS`. Assim, o módulo de frequência valida as mesmas sessões do módulo de perfis. Leituras aceitam `OWNER`, `ADMIN`, `EDITOR` e `USER`; somente `OWNER`, `ADMIN` e `EDITOR` podem registrar chamadas.
 
 Funções administrativas disponíveis no editor:
 
@@ -102,11 +121,7 @@ Funções administrativas disponíveis no editor:
 
 ### Perfis e avaliações
 
-Execute `setupScholarshipSystem()` somente ao preparar uma planilha nova. Para criar o primeiro usuário sem senha exposta no código:
-
-1. Defina temporariamente `INITIAL_USER_LOGIN`, `INITIAL_USER_PASSWORD` e `INITIAL_USER_ROLE` nas propriedades do script.
-2. Execute `seedInitialUserFromProperties()`.
-3. A propriedade com a senha será removida automaticamente após a criação.
+Execute `setupScholarshipSystem()` somente ao preparar uma planilha nova. Em uma base existente, a primeira solicitação de código executa uma migração aditiva das abas `USERS` e `SESSIONS`, cria `AUTH_AUDIT`, revoga as sessões antigas e garante o proprietário `normafederal@gmail.com`. Não configure senha inicial.
 
 ### Sincronização com `clasp`
 
@@ -146,9 +161,11 @@ Os testes verificam sintaxe, rotas agregadas, segurança do usuário inicial, ca
 ## Segurança
 
 - Não publique planilhas, senhas, tokens de sessão, credenciais OAuth ou dados pessoais exportados.
-- A área de perfis exige sessão e papel de acesso.
-- A API de frequência permanece acessível anonimamente para ser compatível com o fluxo atual. Para uso fora da equipe, recomenda-se adicionar autenticação institucional também a esse módulo.
-- As antigas rotinas com senhas padrão foram removidas do código versionado.
+- Perfis, diretório, dashboard e chamada exigem uma sessão válida.
+- O módulo de frequência valida o hash da sessão diretamente nas abas `USERS` e `SESSIONS`; escrita nunca usa cache de autorização.
+- Somente o proprietário pode conceder ou remover acessos.
+- Códigos de login têm expiração, limite de tentativas, intervalo de reenvio, teto global de envio e resposta que não revela se um e-mail está cadastrado.
+- As antigas senhas e sessões em texto puro são removidas/revogadas pela migração.
 
 ---
 

@@ -497,8 +497,8 @@ body.page-soft[data-page="editor"] .tile-btn:focus{
 .academic-navbar .nav-link.active{color:var(--navy)!important;background:#e9f1fb;box-shadow:inset 0 0 0 1px #d7e5f5}
 .nav-account{display:flex;align-items:center;gap:.65rem}
 .nav-account-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#e7f3f1;color:#087267;font-weight:850}
-.nav-account-copy{display:grid;min-width:84px;line-height:1.05}
-.nav-account-copy strong{font-size:.82rem;color:#24364a}.nav-account-copy small{margin-top:4px;color:var(--muted);font-size:.67rem}
+.nav-account-copy{display:grid;min-width:84px;max-width:220px;line-height:1.05}
+.nav-account-copy strong{overflow:hidden;text-overflow:ellipsis;font-size:.82rem;color:#24364a}.nav-account-copy small{margin-top:4px;color:var(--muted);font-size:.67rem}
 .nav-logout{border-color:#d7e0e9;color:#506176}
 
 .app-page{max-width:1240px!important;padding-top:28px!important;padding-bottom:64px!important}
@@ -566,6 +566,7 @@ body.page-soft[data-page="editor"] .ios-card>.card-header,.ios-card-header{backg
 .login-box{width:min(455px,100%)}.login-mobile-brand{display:none}.login-kicker{margin:0 0 7px;color:var(--teal);font-size:.72rem;font-weight:850;letter-spacing:.13em;text-transform:uppercase}.login-title{margin:0;color:#122c48;font-size:1.85rem;font-weight:850;letter-spacing:-.035em}.login-subtitle{margin:8px 0 24px;color:var(--muted);font-size:.9rem}
 .login-card{padding:24px;border:1px solid #dce5ee;border-radius:21px;background:#fff;box-shadow:0 22px 55px rgba(18,54,93,.11)}
 .login-card .form-label{color:#344961;font-size:.78rem;font-weight:800}.login-card .form-control{min-height:48px;border-color:#d8e1eb}.login-card .btn{min-height:48px}.login-help{display:flex;align-items:center;gap:8px;margin-top:16px;color:#758398;font-size:.74rem}.login-help:before{content:"";width:7px;height:7px;border-radius:50%;background:#17a084}
+.login-code-context{display:grid;gap:3px;margin-bottom:18px;padding:11px 13px;border-radius:13px;background:#f2f6fa;color:var(--muted);font-size:.76rem}.login-code-context strong{overflow-wrap:anywhere;color:#24364a;font-size:.86rem}.login-code-input{text-align:center;font-size:1.25rem!important;font-weight:850;letter-spacing:.28em}.login-code-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}.login-code-actions .btn{min-height:auto;padding:5px 0;text-decoration:none;font-size:.77rem}
 
 @media(max-width:991px){
   .app-nav-inner{padding:.55rem 1rem}.academic-navbar .navbar-collapse{padding-top:.8rem}.nav-account{margin-top:.7rem;padding-top:.7rem;border-top:1px solid var(--border)}
@@ -668,6 +669,7 @@ body.page-soft[data-page="editor"] .ios-card>.card-header,.ios-card-header{backg
 
 .editor-content-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);align-items:start;gap:16px}
 .editor-narrow-card{max-width:780px}.catalog-actions{display:grid;gap:18px}.catalog-action+.catalog-action{padding-top:17px;border-top:1px solid #e8edf2}
+.access-workspace{display:grid;gap:18px}.access-active-check{width:100%;padding:11px 12px 11px 38px;border:1px solid var(--border);border-radius:12px;background:#f8fafc}.access-table td{vertical-align:middle}.access-row-inactive{opacity:.68;background:#f8fafc}.access-row-actions{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}.access-row-actions .btn{white-space:nowrap}
 .score-editor{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:18px}
 .score-row{padding:13px;border:1px solid #e1e8ef;border-radius:14px;background:#f9fbfd}.score-row label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;color:#263c55;font-size:.76rem}.score-row label span{color:var(--teal);font-size:.7rem;font-weight:850}
 .evaluation-preview-card{position:sticky;top:84px}.evaluation-preview-card pre{min-height:220px;margin:0;padding:15px;border:1px solid #dde5ee;border-radius:13px;background:#f7f9fb;color:#31465e;font-family:inherit;font-size:.8rem;line-height:1.55;white-space:pre-wrap}
@@ -684,4 +686,5 @@ body.page-soft[data-page="editor"] .ios-card>.card-header,.ios-card-header{backg
   .editor-form-actions{align-items:stretch;flex-direction:column-reverse}.editor-form-actions .btn{width:100%}
   .editor-form-hint{text-align:left}.score-editor{grid-template-columns:1fr}
   .student-editor-item{grid-template-columns:40px minmax(0,1fr)}.student-editor-state{display:none}
+  .access-table{min-width:760px}.login-code-actions{align-items:stretch;flex-direction:column}.login-code-actions .btn{width:100%}
 }

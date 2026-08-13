@@ -3,9 +3,9 @@
  * =========================
  * Roteamento por action:
  * - ping
- * - login, logout, me
+ * - requestLoginCode, verifyLoginCode, logout, me
  *
- * VIEWER/EDITOR (relatórios e consultas):
+ * USER/EDITOR/ADMIN/OWNER (relatórios e consultas):
  * - listStudents
  * - listSectors
  * - listScholarshipTypes
@@ -13,17 +13,17 @@
  * - listEvaluationsByStudent
  * - getStudentReport
  *
- * Somente EDITOR (cadastros/edições):
+ * EDITOR/ADMIN/OWNER (cadastros/edições):
  * - upsertStudent, deactivateStudent, setStudentSector
  * - upsertSector
  * - upsertScholarshipType
  * - upsertCompetency
  * - createEvaluation
- * - createUser
- * - changePassword
+ * Somente OWNER:
+ * - listUsers, upsertUser, revokeUserSessions
  *
  * Segurança:
- * - login -> session_token (tabela SESSIONS)
+ * - código temporário enviado por e-mail -> session_token (tabela SESSIONS)
  * - demais actions exigem token via:
  *   - Header Authorization: Bearer <token> (se vier)
  *   - OU body/query: token=<token> (fallback confiável)
@@ -32,13 +32,20 @@
  * - Rodar setupScholarshipSystem() do Code.gs antes.
  */
 
-const PROFILE_API_VERSION = "2.4.0";
-const PROFILE_CACHE_PREFIX = "profile-api:v2:";
+const PROFILE_API_VERSION = "3.0.0";
+const PROFILE_CACHE_PREFIX = "profile-api:v3:";
+const PROFILE_OWNER_EMAIL = "normafederal@gmail.com";
+const PROFILE_ROLES = Object.freeze(["OWNER", "ADMIN", "EDITOR", "USER"]);
+const PROFILE_LOGIN_CODE_TTL_SECONDS = 10 * 60;
+const PROFILE_LOGIN_CODE_RESEND_SECONDS = 60;
+const PROFILE_LOGIN_MAX_ATTEMPTS = 5;
+const PROFILE_LOGIN_GLOBAL_HOURLY_LIMIT = 100;
 const PROFILE_CACHEABLE_SHEETS = Object.freeze({
   STUDENTS: 300,
   SECTORS: 600,
   SCHOLARSHIP_TYPES: 600,
   COMPETENCIES: 600,
+  EVALUATIONS: 120,
   SETTINGS: 300,
   USERS: 300
 });
@@ -47,6 +54,7 @@ const PROFILE_SESSION_CACHE_SECONDS = 300;
 const _sheetRuntimeCache = {};
 const _rowsRuntimeCache = {};
 const _headersRuntimeCache = {};
+let _profileAuthSchemaReady = false;
 
 function doOptions(e) {
   return _corsTextOutput_("");
@@ -71,7 +79,8 @@ function _handleRequest_(e, method) {
 
     // Ações públicas
     if (action === "ping") return _corsJsonOutput_({ ok: true, now: _nowIso_(), version: PROFILE_API_VERSION });
-    if (action === "login") return _corsJsonOutput_(_login_(req));
+    if (action === "requestLoginCode") return _corsJsonOutput_(_requestLoginCode_(req));
+    if (action === "verifyLoginCode") return _corsJsonOutput_(_verifyLoginCode_(req));
 
     // Demais ações exigem autenticação
     const auth = _requireAuth_(req);
@@ -82,9 +91,9 @@ function _handleRequest_(e, method) {
         return _corsJsonOutput_(_logout_(req, ctx));
 
       case "me":
-        return _corsJsonOutput_({ ok: true, user: { user_id: ctx.user.user_id, login: ctx.user.login, role: ctx.user.role } });
+        return _corsJsonOutput_({ ok: true, user: _publicUser_(ctx.user) });
 
-      /* ===== Relatórios / Consultas (VIEWER + EDITOR) ===== */
+      /* ===== Relatórios / Consultas (usuários autenticados) ===== */
 
       case "listStudents":
         return _corsJsonOutput_(_listStudents_(req, ctx));
@@ -122,42 +131,46 @@ function _handleRequest_(e, method) {
       /* ===== Cadastros / Edições (somente EDITOR) ===== */
 
       case "upsertStudent":
-        _requireRole_(ctx, ["EDITOR"]);
+        _requireRole_(ctx, ["OWNER", "ADMIN", "EDITOR"]);
         return _corsJsonOutput_(_upsertStudent_(req, ctx));
 
       case "deactivateStudent":
-        _requireRole_(ctx, ["EDITOR"]);
+        _requireRole_(ctx, ["OWNER", "ADMIN", "EDITOR"]);
         return _corsJsonOutput_(_deactivateStudent_(req, ctx));
 
       case "setStudentSector":
-        _requireRole_(ctx, ["EDITOR"]);
+        _requireRole_(ctx, ["OWNER", "ADMIN", "EDITOR"]);
         return _corsJsonOutput_(_setStudentSector_(req, ctx));
 
       case "upsertSector":
-        _requireRole_(ctx, ["EDITOR"]);
+        _requireRole_(ctx, ["OWNER", "ADMIN"]);
         return _corsJsonOutput_(_upsertSector_(req, ctx));
 
       case "upsertScholarshipType":
-        _requireRole_(ctx, ["EDITOR"]);
+        _requireRole_(ctx, ["OWNER", "ADMIN"]);
         return _corsJsonOutput_(_upsertScholarshipType_(req, ctx));
 
       case "upsertCompetency":
-        _requireRole_(ctx, ["EDITOR"]);
+        _requireRole_(ctx, ["OWNER", "ADMIN"]);
         return _corsJsonOutput_(_upsertCompetency_(req, ctx));
 
       case "createEvaluation":
-        _requireRole_(ctx, ["EDITOR"]);
+        _requireRole_(ctx, ["OWNER", "ADMIN", "EDITOR"]);
         return _corsJsonOutput_(_createEvaluation_(req, ctx));
 
-      /* ===== Admin de usuários (somente EDITOR) ===== */
+      /* ===== Admin de usuários (somente proprietário) ===== */
 
-      case "createUser":
-        _requireRole_(ctx, ["EDITOR"]);
-        return _corsJsonOutput_(_createUser_(req, ctx));
+      case "listUsers":
+        _requireRole_(ctx, ["OWNER"]);
+        return _corsJsonOutput_(_listUsers_(req, ctx));
 
-      case "changePassword":
-        _requireRole_(ctx, ["EDITOR"]);
-        return _corsJsonOutput_(_changePassword_(req, ctx));
+      case "upsertUser":
+        _requireRole_(ctx, ["OWNER"]);
+        return _corsJsonOutput_(_upsertUser_(req, ctx));
+
+      case "revokeUserSessions":
+        _requireRole_(ctx, ["OWNER"]);
+        return _corsJsonOutput_(_revokeUserSessions_(req, ctx));
 
       default:
         return _error_("Unknown action: " + action, 400);
@@ -195,6 +208,7 @@ function _parseRequest_(e, method) {
 /* ========================= Auth / Sessions ========================= */
 
 function _requireAuth_(req) {
+  _ensureAuthSchemaAndOwner_();
   const token = _getTokenFromReq_(req);
   if (!token) throw new Error("Missing session token");
 
@@ -205,15 +219,20 @@ function _requireAuth_(req) {
 
   const sess = _getSessionByToken_(token);
   if (!sess) throw new Error("Invalid session token");
-  if (sess.revoked === "TRUE") throw new Error("Session revoked");
-  if (new Date(sess.expires_at).getTime() < Date.now()) throw new Error("Session expired");
+  if (_isTruthy_(sess.revoked)) throw new Error("Session revoked");
+  const expiresAt = new Date(sess.expires_at).getTime();
+  if (!isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error("Session expired");
 
   const user = _getUserById_(sess.user_id);
   if (!user) throw new Error("User not found");
   if (String(user.active || "").toUpperCase() !== "TRUE") throw new Error("User inactive");
+  if (String(sess.auth_version || "1") !== String(user.auth_version || "1")) {
+    throw new Error("Session revoked");
+  }
 
-  _writeAuthCache_(token, sess, user);
-  return { ok: true, ctx: { token: token, session: sess, user: user } };
+  const publicUser = _publicUser_(user);
+  _writeAuthCache_(token, sess, publicUser);
+  return { ok: true, ctx: { token: token, session: sess, user: publicUser } };
 }
 
 function _requireRole_(ctx, roles) {
@@ -231,57 +250,168 @@ function _getTokenFromReq_(req) {
   return (req.token || "").trim();
 }
 
-function _login_(req) {
-  const login = (req.login || "").trim();
-  const password = String(req.password || "");
+function _requestLoginCode_(req) {
+  _ensureAuthSchemaAndOwner_();
+  const email = _normalizeEmail_(req.email);
+  if (!_isValidEmail_(email)) return { ok: false, error: "Informe um e-mail válido." };
 
-  if (!login || !password) return { ok: false, error: "Missing login/password" };
+  const cache = CacheService.getScriptCache();
+  const emailKey = _sha256Base64_(email);
+  const cooldownKey = PROFILE_CACHE_PREFIX + "otp-cooldown:" + emailKey;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
 
-  const user = _getUserByLogin_(login);
-  if (!user) return { ok: false, error: "Invalid credentials" };
-  if (String(user.active || "").toUpperCase() !== "TRUE") return { ok: false, error: "User inactive" };
+  let challengeId = "";
+  let code = "";
+  let shouldSend = false;
+  try {
+    const recent = cache.get(cooldownKey);
+    if (recent) {
+      const saved = JSON.parse(recent);
+      challengeId = String(saved.challenge_id || "");
+      if (challengeId) return _loginCodeRequested_(challengeId);
+    }
 
+    const user = _getUserByEmail_(email);
+    const allowed = !!user && String(user.active || "").toUpperCase() === "TRUE";
+    challengeId = _secureToken_();
+    code = _generateLoginCode_();
+    const challenge = {
+      challenge_id: challengeId,
+      email: email,
+      user_id: allowed ? String(user.user_id || "") : "",
+      code_hash: _loginCodeHash_(challengeId, email, code),
+      allowed: allowed,
+      attempts: 0,
+      expires_at: Date.now() + PROFILE_LOGIN_CODE_TTL_SECONDS * 1000
+    };
+    cache.put(_loginChallengeKey_(challengeId), JSON.stringify(challenge), PROFILE_LOGIN_CODE_TTL_SECONDS);
+    cache.put(cooldownKey, JSON.stringify({ challenge_id: challengeId }), PROFILE_LOGIN_CODE_RESEND_SECONDS);
 
-  const salt = _getSetting_("PASSWORD_SALT", "change-me");
-  const computed = _sha256Base64_(salt + ":" + password);
-  if (computed !== user.password_hash) return { ok: false, error: "Invalid credentials" };
+    const hourlyKey = PROFILE_CACHE_PREFIX + "otp-hour:" + emailKey;
+    const hourlyCount = Number(cache.get(hourlyKey) || "0");
+    cache.put(hourlyKey, String(hourlyCount + 1), 60 * 60);
+    const globalHourlyKey = PROFILE_CACHE_PREFIX + "otp-hour:global";
+    const globalHourlyCount = Number(cache.get(globalHourlyKey) || "0");
+    if (allowed) cache.put(globalHourlyKey, String(globalHourlyCount + 1), 60 * 60);
+    shouldSend = allowed && hourlyCount < 6 && globalHourlyCount < PROFILE_LOGIN_GLOBAL_HOURLY_LIMIT;
+  } finally {
+    lock.releaseLock();
+  }
 
-  const sessionDays = Number(_getSetting_("SESSION_DAYS", "7")) || 7;
+  if (shouldSend) {
+    try {
+      if (MailApp.getRemainingDailyQuota() < 1) throw new Error("Limite diário de e-mails atingido");
+      MailApp.sendEmail({
+        to: email,
+        subject: "Seu código de acesso • IAPE",
+        name: "IAPE • Gestão Estudantil",
+        body: "Seu código de acesso é " + code + ". Ele expira em 10 minutos. Se você não solicitou este código, ignore esta mensagem.",
+        htmlBody: "<p>Seu código de acesso ao <strong>IAPE • Gestão Estudantil</strong> é:</p>" +
+          "<p style=\"font-size:28px;font-weight:700;letter-spacing:6px\">" + code + "</p>" +
+          "<p>Ele expira em 10 minutos. Se você não solicitou este código, ignore esta mensagem.</p>"
+      });
+    } catch (error) {
+      cache.remove(_loginChallengeKey_(challengeId));
+      cache.remove(cooldownKey);
+      return { ok: false, error: "Não foi possível enviar o código agora. Tente novamente em instantes." };
+    }
+  }
+
+  return _loginCodeRequested_(challengeId);
+}
+
+/**
+ * Execute uma vez no editor após adicionar o login por e-mail. A execução abre
+ * o consentimento do Google para o MailApp e confirma a cota disponível sem
+ * enviar mensagem alguma.
+ */
+function authorizeMailForLogin() {
+  const remaining = MailApp.getRemainingDailyQuota();
+  if (remaining < 1) throw new Error("A cota diária de e-mail está indisponível");
+  console.log("MailApp autorizado. Cota restante: " + remaining);
+  return remaining;
+}
+
+function _verifyLoginCode_(req) {
+  _ensureAuthSchemaAndOwner_();
+  const email = _normalizeEmail_(req.email);
+  const challengeId = String(req.challenge_id || "").trim();
+  const code = String(req.code || "").replace(/\D/g, "");
+  if (!_isValidEmail_(email) || !challengeId || !/^\d{6}$/.test(code)) {
+    return { ok: false, error: "Código inválido ou expirado." };
+  }
+
+  const cache = CacheService.getScriptCache();
+  const challengeKey = _loginChallengeKey_(challengeId);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  let user = null;
+  try {
+    const raw = cache.get(challengeKey);
+    if (!raw) return { ok: false, error: "Código inválido ou expirado." };
+    const challenge = JSON.parse(raw);
+    const expired = Number(challenge.expires_at || 0) <= Date.now();
+    const matches = !expired && challenge.email === email && challenge.allowed === true &&
+      _constantTimeEqual_(challenge.code_hash, _loginCodeHash_(challengeId, email, code));
+
+    if (!matches) {
+      challenge.attempts = Number(challenge.attempts || 0) + 1;
+      if (expired || challenge.attempts >= PROFILE_LOGIN_MAX_ATTEMPTS) cache.remove(challengeKey);
+      else {
+        const remaining = Math.max(1, Math.floor((Number(challenge.expires_at) - Date.now()) / 1000));
+        cache.put(challengeKey, JSON.stringify(challenge), remaining);
+      }
+      return { ok: false, error: "Código inválido ou expirado." };
+    }
+
+    user = _getUserById_(challenge.user_id) || _getUserByEmail_(email);
+    if (!user || _normalizeEmail_(user.email || user.login) !== email ||
+        String(user.active || "").toUpperCase() !== "TRUE") {
+      cache.remove(challengeKey);
+      return { ok: false, error: "Código inválido ou expirado." };
+    }
+    cache.remove(challengeKey);
+  } finally {
+    lock.releaseLock();
+  }
+
+  const session = _createSession_(user, req);
+  _updateUserLastLogin_(user.user_id);
+  _auditAuth_(user, "LOGIN_SUCCESS", user, {});
+  return session;
+}
+
+function _createSession_(user, req) {
+  const sessionDays = Math.max(1, Math.min(30, Number(_getSetting_("SESSION_DAYS", "7")) || 7));
   const issued = new Date();
   const expires = new Date(issued.getTime() + sessionDays * 24 * 60 * 60 * 1000);
-
-  const token = _randToken_();
-  const issuedAt = _formatDateTime_(issued);
-  const expiresAt = _formatDateTime_(expires);
-  _appendRow_("SESSIONS", [
-    token,
-    user.user_id,
-    user.role,
-    issuedAt,
-    expiresAt,
-    "FALSE",
-    String(req.ip || ""),
-    String(req.user_agent || "")
-  ]);
-
-  _writeAuthCache_(token, {
-    session_token: token,
+  const token = _secureToken_();
+  const publicUser = _publicUser_(user);
+  const session = {
+    session_token: "",
     user_id: user.user_id,
-    role: user.role,
-    issued_at: issuedAt,
-    expires_at: expiresAt,
+    role: publicUser.role,
+    issued_at: issued.toISOString(),
+    expires_at: expires.toISOString(),
     revoked: "FALSE",
-    ip: String(req.ip || ""),
-    user_agent: String(req.user_agent || "")
-  }, user);
+    ip: "",
+    user_agent: String(req.user_agent || "").slice(0, 300),
+    session_id: _uuid_(),
+    token_hash: _sessionTokenHash_(token),
+    auth_version: String(user.auth_version || "1")
+  };
+  _appendObjectRow_(_sheet_("SESSIONS"), session);
+  _writeAuthCache_(token, session, publicUser);
+  return { ok: true, token: token, user: publicUser, expires_at: session.expires_at };
+}
 
-  _updateUserLastLogin_(user.user_id);
-
+function _loginCodeRequested_(challengeId) {
   return {
     ok: true,
-    token: token,
-    user: { user_id: user.user_id, login: user.login, role: user.role },
-    expires_at: expiresAt
+    challenge_id: challengeId,
+    expires_in: PROFILE_LOGIN_CODE_TTL_SECONDS,
+    message: "Se o e-mail estiver autorizado, o código chegará em instantes."
   };
 }
 
@@ -362,15 +492,17 @@ function _getStudentDirectory_(req, ctx) {
 }
 
 function _getEditorBootstrap_(req, ctx) {
-  _requireRole_(ctx, ["EDITOR"]);
+  _requireRole_(ctx, ["OWNER", "ADMIN", "EDITOR"]);
   const students = _listStudents_({ filters: {} }, ctx);
-  return {
+  const result = {
     ok: true,
     students: students.students,
     sectors: _getAll_("SECTORS"),
     scholarship_types: _getAll_("SCHOLARSHIP_TYPES"),
     competencies: _getAll_("COMPETENCIES")
   };
+  if (ctx.user.role === "OWNER") result.users = _getAll_("USERS").map(_publicUser_);
+  return result;
 }
 
 function _getStudentProfile_(req, ctx) {
@@ -688,7 +820,7 @@ function _createEvaluation_(req, ctx) {
 
   const date = String(p.date || "").trim() || _today_();
   const periodTag = String(p.period_tag || "").trim();
-  const evaluator = String(p.evaluator || ctx.user.login || "").trim();
+  const evaluator = String(p.evaluator || ctx.user.email || ctx.user.login || "").trim();
 
   const scores = p.scores || {};
   if (!scores || typeof scores !== "object") throw new Error("scores must be an object");
@@ -786,7 +918,7 @@ function _getStudentReport_(req, ctx) {
 }
 
 
-/* ========================= Sponsor report (VIEWER-friendly, LGPD/minimização) ========================= */
+/* ========================= Sponsor report (consulta, LGPD/minimização) ========================= */
 
 function _getSponsorReport_(req, ctx) {
   const studentId = String(req.student_id || "").trim();
@@ -1059,83 +1191,325 @@ function _closestKey_(normName, keys) {
   return "";
 }
 
-/* ========================= Users admin endpoints ========================= */
+/* ========================= Passwordless auth schema ========================= */
 
-function _createUser_(req, ctx) {
-  const p = req.user || req;
-
-  const login = String(p.login || "").trim();
-  const password = String(p.password || "");
-  const role = String(p.role || "VIEWER").trim().toUpperCase();
-  const active = String(p.active || "TRUE").toUpperCase() === "FALSE" ? "FALSE" : "TRUE";
-
-  if (!login) throw new Error("user.login is required");
-  if (!password) throw new Error("user.password is required");
-  if (password.length < 8) throw new Error("A senha deve ter pelo menos 8 caracteres");
-  if (role !== "VIEWER" && role !== "EDITOR") throw new Error("user.role must be VIEWER or EDITOR");
-
-  const existing = _getUserByLogin_(login);
-  if (existing) throw new Error("Login already exists");
-
-  const salt = _getSetting_("PASSWORD_SALT", "");
-  if (!salt || salt === "change-me") {
-    _setSetting_("PASSWORD_SALT", _randToken_(), "Salt para hash de senha");
+function _ensureAuthSchemaAndOwner_() {
+  if (_profileAuthSchemaReady) return;
+  const properties = PropertiesService.getScriptProperties();
+  if (properties.getProperty("AUTH_SCHEMA_VERSION") === "3") {
+    _profileAuthSchemaReady = true;
+    return;
   }
-  const finalSalt = _getSetting_("PASSWORD_SALT", "change-me");
-  const hash = _sha256Base64_(finalSalt + ":" + password);
 
-  const userId = _uuid_();
-  const now = _nowIso_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    if (properties.getProperty("AUTH_SCHEMA_VERSION") === "3") {
+      _profileAuthSchemaReady = true;
+      return;
+    }
 
-  _appendRow_("USERS", [
-    userId,
-    login,
-    hash,
-    role,
-    active,
-    "",
-    now,
-    now
-  ]);
+    const usersSheet = _sheet_("USERS");
+    const userHeaders = _ensureSheetHeaders_(usersSheet, [
+      "user_id", "login", "password_hash", "role", "active", "last_login_at",
+      "created_at", "updated_at", "email", "auth_version", "invited_by", "invited_at"
+    ]);
+    const userValues = usersSheet.getLastRow() >= 2
+      ? usersSheet.getRange(2, 1, usersSheet.getLastRow() - 1, userHeaders.length).getValues()
+      : [];
+    let ownerFound = false;
+    const now = _nowIso_();
 
-  return { ok: true, user_id: userId, login: login, role: role, active: active };
+    userValues.forEach(function (row) {
+      const get = function (name) { return row[userHeaders.indexOf(name)]; };
+      const set = function (name, value) { row[userHeaders.indexOf(name)] = value; };
+      const legacyLogin = _normalizeEmail_(get("login"));
+      let email = _normalizeEmail_(get("email"));
+      if (!email && _isValidEmail_(legacyLogin)) email = legacyLogin;
+      const isOwner = email === PROFILE_OWNER_EMAIL || legacyLogin === PROFILE_OWNER_EMAIL;
+      if (isOwner) {
+        ownerFound = true;
+        email = PROFILE_OWNER_EMAIL;
+        set("role", "OWNER");
+        set("active", "TRUE");
+      } else {
+        const migratedRole = _normalizeRole_(get("role"));
+        set("role", migratedRole === "OWNER" ? "ADMIN" : migratedRole);
+      }
+      set("email", email);
+      if (email) set("login", email);
+      set("password_hash", "");
+      set("auth_version", String(Math.max(1, Number(get("auth_version") || "1"))));
+      if (!get("created_at")) set("created_at", now);
+      set("updated_at", now);
+    });
+    if (userValues.length) {
+      usersSheet.getRange(2, 1, userValues.length, userHeaders.length).setValues(userValues);
+    }
+    _invalidateSheetCache_("USERS");
+
+    if (!ownerFound) {
+      _appendObjectRow_(usersSheet, {
+        user_id: _uuid_(),
+        login: PROFILE_OWNER_EMAIL,
+        password_hash: "",
+        role: "OWNER",
+        active: "TRUE",
+        last_login_at: "",
+        created_at: now,
+        updated_at: now,
+        email: PROFILE_OWNER_EMAIL,
+        auth_version: "1",
+        invited_by: "SYSTEM",
+        invited_at: now
+      });
+    }
+
+    const sessionsSheet = _sheet_("SESSIONS");
+    const sessionHeaders = _ensureSheetHeaders_(sessionsSheet, [
+      "session_token", "user_id", "role", "issued_at", "expires_at", "revoked",
+      "ip", "user_agent", "session_id", "token_hash", "auth_version"
+    ]);
+    if (sessionsSheet.getLastRow() >= 2) {
+      const sessionValues = sessionsSheet.getRange(
+        2, 1, sessionsSheet.getLastRow() - 1, sessionHeaders.length
+      ).getValues();
+      const tokenColumn = sessionHeaders.indexOf("session_token");
+      const revokedColumn = sessionHeaders.indexOf("revoked");
+      sessionValues.forEach(function (row) {
+        row[tokenColumn] = "";
+        row[revokedColumn] = "TRUE";
+      });
+      sessionsSheet.getRange(2, 1, sessionValues.length, sessionHeaders.length).setValues(sessionValues);
+    }
+
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const auditSheet = spreadsheet.getSheetByName("AUTH_AUDIT") || spreadsheet.insertSheet("AUTH_AUDIT");
+    _sheetRuntimeCache.AUTH_AUDIT = auditSheet;
+    _ensureSheetHeaders_(auditSheet, [
+      "event_id", "actor_user_id", "actor_email", "action", "target_user_id",
+      "target_email", "details_json", "created_at"
+    ]);
+
+    properties.setProperty("AUTH_SCHEMA_VERSION", "3");
+    _profileAuthSchemaReady = true;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
-function _changePassword_(req, ctx) {
-  const p = req.payload || req;
-
-  const login = String(p.login || "").trim();
-  const userId = String(p.user_id || "").trim();
-  const newPassword = String(p.new_password || "");
-
-  if (!newPassword) throw new Error("new_password is required");
-  if (newPassword.length < 8) throw new Error("A nova senha deve ter pelo menos 8 caracteres");
-  if (!login && !userId) throw new Error("login or user_id is required");
-
-  let user = null;
-  if (userId) user = _getUserById_(userId);
-  if (!user && login) user = _getUserByLogin_(login);
-  if (!user) throw new Error("User not found");
-
-  const salt = _getSetting_("PASSWORD_SALT", "");
-  if (!salt || salt === "change-me") {
-    _setSetting_("PASSWORD_SALT", _randToken_(), "Salt para hash de senha");
+function _ensureSheetHeaders_(sheet, requiredHeaders) {
+  const lastColumn = Math.max(1, sheet.getLastColumn());
+  let headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String);
+  while (headers.length && !headers[headers.length - 1]) headers.pop();
+  const missing = requiredHeaders.filter(function (header) { return headers.indexOf(header) === -1; });
+  if (!headers.length) {
+    headers = requiredHeaders.slice();
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else if (missing.length) {
+    sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]);
+    headers = headers.concat(missing);
   }
-  const finalSalt = _getSetting_("PASSWORD_SALT", "change-me");
-  const hash = _sha256Base64_(finalSalt + ":" + newPassword);
+  delete _headersRuntimeCache[sheet.getName()];
+  delete _rowsRuntimeCache[sheet.getName()];
+  return headers;
+}
 
-  const sh = _sheet_("USERS");
-  const idx = _findRowByKey_(sh, "user_id", user.user_id);
-  if (!idx.rowNumber) throw new Error("User row not found");
+function _normalizeEmail_(value) {
+  return String(value || "").trim().toLowerCase();
+}
 
-  idx.row.password_hash = hash;
-  idx.row.updated_at = _nowIso_();
-  _updateObjectRow_(sh, idx.rowNumber, idx.row);
+function _isTruthy_(value) {
+  return value === true || String(value || "").trim().toUpperCase() === "TRUE";
+}
 
-  const revoke = String(p.revoke_sessions || "TRUE").toUpperCase() === "TRUE";
-  if (revoke) _revokeAllSessionsByUser_(user.user_id);
+function _isValidEmail_(value) {
+  const email = _normalizeEmail_(value);
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
-  return { ok: true, user_id: user.user_id, login: user.login, revoked_sessions: revoke };
+function _normalizeRole_(value) {
+  const role = String(value || "USER").trim().toUpperCase();
+  if (role === "VIEWER") return "USER";
+  return PROFILE_ROLES.indexOf(role) === -1 ? "USER" : role;
+}
+
+function _publicUser_(user) {
+  const email = _normalizeEmail_(user && (user.email || user.login));
+  const normalizedRole = _normalizeRole_(user && user.role);
+  const role = email === PROFILE_OWNER_EMAIL
+    ? "OWNER"
+    : (normalizedRole === "OWNER" ? "ADMIN" : normalizedRole);
+  return {
+    user_id: String(user && user.user_id || ""),
+    email: email,
+    login: email,
+    role: role,
+    active: String(user && user.active || "TRUE").toUpperCase() !== "FALSE",
+    last_login_at: String(user && user.last_login_at || ""),
+    created_at: String(user && user.created_at || ""),
+    updated_at: String(user && user.updated_at || "")
+  };
+}
+
+function _loginChallengeKey_(challengeId) {
+  return PROFILE_CACHE_PREFIX + "otp:" + _sha256Base64_(challengeId);
+}
+
+function _loginCodeHash_(challengeId, email, code) {
+  const bytes = Utilities.computeHmacSha256Signature(
+    String(challengeId) + ":" + _normalizeEmail_(email) + ":" + String(code),
+    _loginPepper_(),
+    Utilities.Charset.UTF_8
+  );
+  return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/g, "");
+}
+
+function _loginPepper_() {
+  const properties = PropertiesService.getScriptProperties();
+  let pepper = properties.getProperty("AUTH_PEPPER");
+  if (!pepper) {
+    pepper = _secureToken_();
+    properties.setProperty("AUTH_PEPPER", pepper);
+  }
+  return pepper;
+}
+
+function _generateLoginCode_() {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    _secureToken_(),
+    Utilities.Charset.UTF_8
+  );
+  let value = 0;
+  for (var i = 0; i < 4; i++) value = (value * 256 + ((bytes[i] + 256) % 256)) >>> 0;
+  return String(value % 1000000).padStart(6, "0");
+}
+
+function _constantTimeEqual_(left, right) {
+  const a = String(left || "");
+  const b = String(right || "");
+  let diff = a.length ^ b.length;
+  const length = Math.max(a.length, b.length);
+  for (var i = 0; i < length; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
+function _secureToken_() {
+  return _sha256Base64_([
+    Utilities.getUuid(), Utilities.getUuid(), Utilities.getUuid(), String(Date.now())
+  ].join(":"));
+}
+
+function _sessionTokenHash_(token) {
+  return _sha256Base64_(String(token || ""));
+}
+
+function _auditAuth_(actor, action, target, details) {
+  try {
+    const sheet = _sheet_("AUTH_AUDIT");
+    _appendObjectRow_(sheet, {
+      event_id: _uuid_(),
+      actor_user_id: String(actor && actor.user_id || ""),
+      actor_email: _normalizeEmail_(actor && (actor.email || actor.login)),
+      action: String(action || ""),
+      target_user_id: String(target && target.user_id || ""),
+      target_email: _normalizeEmail_(target && (target.email || target.login)),
+      details_json: JSON.stringify(details || {}),
+      created_at: _nowIso_()
+    });
+  } catch (_) {}
+}
+
+/* ========================= Users admin endpoints ========================= */
+
+function _listUsers_(req, ctx) {
+  const users = _getAll_("USERS").map(_publicUser_).sort(function (a, b) {
+    if (a.role === "OWNER") return -1;
+    if (b.role === "OWNER") return 1;
+    return String(a.email).localeCompare(String(b.email), "pt-BR");
+  });
+  return { ok: true, users: users, count: users.length };
+}
+
+function _upsertUser_(req, ctx) {
+  const p = req.user || req;
+  const email = _normalizeEmail_(p.email);
+  const requestedId = String(p.user_id || "").trim();
+  const role = String(p.role || "USER").trim().toUpperCase();
+  if (!_isValidEmail_(email)) throw new Error("Informe um e-mail válido");
+  if (["ADMIN", "EDITOR", "USER"].indexOf(role) === -1) throw new Error("Função inválida");
+  if (email === PROFILE_OWNER_EMAIL) throw new Error("O acesso do proprietário não pode ser alterado");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  let saved = null;
+  let existing = null;
+  try {
+    if (requestedId) existing = _getUserById_(requestedId);
+    const sameEmail = _getUserByEmail_(email);
+    if (sameEmail && (!existing || sameEmail.user_id !== existing.user_id)) {
+      throw new Error("Este e-mail já está cadastrado");
+    }
+    if (!existing) existing = sameEmail;
+    if (existing && _normalizeEmail_(existing.email || existing.login) === PROFILE_OWNER_EMAIL) {
+      throw new Error("O acesso do proprietário não pode ser alterado");
+    }
+
+    const now = _nowIso_();
+    const active = p.active === undefined
+      ? String(existing && existing.active || "TRUE").toUpperCase() !== "FALSE"
+      : !(p.active === false || String(p.active).toUpperCase() === "FALSE");
+    const changedAccess = !existing || _normalizeEmail_(existing.email || existing.login) !== email ||
+      _normalizeRole_(existing.role) !== role ||
+      (String(existing.active || "TRUE").toUpperCase() === "TRUE") !== active;
+    const authVersion = existing
+      ? Math.max(1, Number(existing.auth_version || "1")) + (changedAccess ? 1 : 0)
+      : 1;
+    const row = Object.assign({}, existing || {}, {
+      user_id: existing ? existing.user_id : _uuid_(),
+      login: email,
+      password_hash: "",
+      role: role,
+      active: active ? "TRUE" : "FALSE",
+      last_login_at: existing ? String(existing.last_login_at || "") : "",
+      created_at: existing ? String(existing.created_at || now) : now,
+      updated_at: now,
+      email: email,
+      auth_version: String(authVersion),
+      invited_by: existing ? String(existing.invited_by || ctx.user.email) : String(ctx.user.email || ""),
+      invited_at: existing ? String(existing.invited_at || now) : now
+    });
+
+    const sheet = _sheet_("USERS");
+    const idx = existing ? _findRowByKey_(sheet, "user_id", existing.user_id) : { rowNumber: 0 };
+    if (idx.rowNumber) _updateObjectRow_(sheet, idx.rowNumber, row);
+    else _appendObjectRow_(sheet, row);
+    if (existing && changedAccess) _revokeAllSessionsByUser_(existing.user_id);
+    saved = _publicUser_(row);
+  } finally {
+    lock.releaseLock();
+  }
+
+  _auditAuth_(ctx.user, existing ? "USER_UPDATED" : "USER_CREATED", saved, {
+    role: saved.role,
+    active: saved.active
+  });
+  return { ok: true, user: saved };
+}
+
+function _revokeUserSessions_(req, ctx) {
+  const p = req.user || req;
+  const target = String(p.user_id || "").trim()
+    ? _getUserById_(String(p.user_id).trim())
+    : _getUserByEmail_(_normalizeEmail_(p.email));
+  if (!target) throw new Error("Usuário não encontrado");
+  if (_normalizeEmail_(target.email || target.login) === PROFILE_OWNER_EMAIL) {
+    throw new Error("As sessões do proprietário não podem ser revogadas por esta tela");
+  }
+  _revokeAllSessionsByUser_(target.user_id);
+  _auditAuth_(ctx.user, "SESSIONS_REVOKED", target, {});
+  return { ok: true, user_id: target.user_id };
 }
 
 function _revokeAllSessionsByUser_(userId) {
@@ -1152,19 +1526,20 @@ function _revokeAllSessionsByUser_(userId) {
   const values = rng.getValues();
 
   let changed = false;
-  const revokedTokens = [];
+  const revokedTokenHashes = [];
+  const colTokenHash = headers.indexOf("token_hash") + 1;
   for (var i = 0; i < values.length; i++) {
     const rowUser = String(values[i][colUser - 1] || "");
     if (rowUser === userId) {
-      const token = String(values[i][0] || "");
-      if (token) revokedTokens.push(token);
+      const tokenHash = colTokenHash > 0 ? String(values[i][colTokenHash - 1] || "") : "";
+      if (tokenHash) revokedTokenHashes.push(tokenHash);
       values[i][colRevoked - 1] = "TRUE";
       changed = true;
     }
   }
   if (changed) {
     rng.setValues(values);
-    revokedTokens.forEach(_removeAuthCache_);
+    revokedTokenHashes.forEach(_removeAuthCacheByHash_);
   }
 }
 
@@ -1208,14 +1583,85 @@ function _getAll_(sheetName) {
 
 function _appendRow_(sheetName, rowArray) {
   const sh = _sheet_(sheetName);
-  sh.getRange(sh.getLastRow() + 1, 1, 1, rowArray.length).setValues([rowArray]);
+  if (sheetName === "SESSIONS") {
+    _writeSessionRow_(sh, rowArray);
+  } else {
+    sh.getRange(sh.getLastRow() + 1, 1, 1, rowArray.length).setValues([rowArray]);
+  }
   _invalidateSheetCache_(sheetName);
+}
+
+function _writeSessionRow_(sheet, rowArray) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error("Não foi possível registrar a sessão agora. Tente novamente.");
+  try {
+    const reusableRow = _takeReusableSessionRow_(sheet);
+    sheet.getRange(reusableRow || sheet.getLastRow() + 1, 1, 1, rowArray.length).setValues([rowArray]);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function _takeReusableSessionRow_(sheet) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = PROFILE_CACHE_PREFIX + "sessions:reusable-rows";
+  const now = Date.now();
+  const cutoff = now - 24 * 60 * 60 * 1000;
+  let state = null;
+
+  try { state = JSON.parse(cache.get(cacheKey) || "null"); } catch (_) { state = null; }
+  if (!state || !Array.isArray(state.rows) || now - Number(state.refreshedAt || 0) > 6 * 60 * 60 * 1000) {
+    const headers = _headers_(sheet);
+    const expiresColumn = headers.indexOf("expires_at") + 1;
+    const rows = [];
+    const lastRow = sheet.getLastRow();
+
+    if (expiresColumn > 0 && lastRow >= 2) {
+      const expirations = sheet.getRange(2, expiresColumn, lastRow - 1, 1).getValues();
+      for (var i = 0; i < expirations.length; i++) {
+        if (_sessionExpiryMillis_(expirations[i][0]) <= cutoff && rows.length < 5000) rows.push(i + 2);
+      }
+    }
+    state = { refreshedAt: now, rows: rows };
+  }
+
+  const expiresColumn = _headers_(sheet).indexOf("expires_at") + 1;
+  let selectedRow = 0;
+  while (expiresColumn > 0 && state.rows.length) {
+    const candidate = Number(state.rows.shift());
+    if (candidate < 2 || candidate > sheet.getLastRow()) continue;
+    const expiration = sheet.getRange(candidate, expiresColumn, 1, 1).getValue();
+    if (_sessionExpiryMillis_(expiration) <= cutoff) {
+      selectedRow = candidate;
+      break;
+    }
+  }
+
+  try { cache.put(cacheKey, JSON.stringify(state), 21600); } catch (_) {}
+  return selectedRow;
+}
+
+function _sessionExpiryMillis_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) return value.getTime();
+  const text = String(value || "").trim();
+  if (/T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+    const isoMillis = Date.parse(text);
+    return isNaN(isoMillis) ? Number.POSITIVE_INFINITY : isoMillis;
+  }
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return Number.POSITIVE_INFINITY;
+  const parsed = new Date(
+    Number(match[1]), Number(match[2]) - 1, Number(match[3]),
+    Number(match[4]), Number(match[5]), Number(match[6] || 0)
+  );
+  return isNaN(parsed.getTime()) ? Number.POSITIVE_INFINITY : parsed.getTime();
 }
 
 function _appendObjectRow_(sheet, obj) {
   const headers = _headers_(sheet);
   const row = headers.map(h => (obj[h] !== undefined ? obj[h] : ""));
-  sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  if (sheet.getName() === "SESSIONS") _writeSessionRow_(sheet, row);
+  else sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
   _invalidateSheetCache_(sheet.getName());
 }
 
@@ -1274,8 +1720,9 @@ function _readAuthCache_(token) {
     if (!value) return null;
     const cached = JSON.parse(value);
     if (!cached || !cached.session || !cached.user) return null;
-    if (cached.session.revoked === "TRUE") return null;
-    if (new Date(cached.session.expires_at).getTime() < Date.now()) return null;
+    if (_isTruthy_(cached.session.revoked)) return null;
+    const expiresAt = new Date(cached.session.expires_at).getTime();
+    if (!isFinite(expiresAt) || expiresAt <= Date.now()) return null;
     if (String(cached.user.active || "").toUpperCase() !== "TRUE") return null;
     return cached;
   } catch (_) {
@@ -1295,6 +1742,10 @@ function _writeAuthCache_(token, session, user) {
 
 function _removeAuthCache_(token) {
   try { CacheService.getScriptCache().remove(_authCacheKey_(token)); } catch (_) {}
+}
+
+function _removeAuthCacheByHash_(tokenHash) {
+  try { CacheService.getScriptCache().remove(PROFILE_CACHE_PREFIX + "auth:" + String(tokenHash || "")); } catch (_) {}
 }
 
 function _readSheetCache_(sheetName) {
@@ -1341,6 +1792,25 @@ function _findRowByKey_(sheet, keyHeader, keyValue) {
   return { rowNumber: 0, row: null };
 }
 
+function _findRowByKeyText_(sheet, keyHeader, keyValue) {
+  const headers = _headers_(sheet);
+  const keyCol = headers.indexOf(keyHeader) + 1;
+  const lastRow = sheet.getLastRow();
+  if (keyCol <= 0) throw new Error("Missing key column: " + keyHeader);
+  if (lastRow < 2 || keyValue === undefined || keyValue === null || keyValue === "") {
+    return { rowNumber: 0, row: null };
+  }
+
+  const match = sheet.getRange(2, keyCol, lastRow - 1, 1)
+    .createTextFinder(String(keyValue))
+    .matchEntireCell(true)
+    .matchCase(true)
+    .findNext();
+  if (!match) return { rowNumber: 0, row: null };
+  const rowNumber = match.getRow();
+  return { rowNumber: rowNumber, row: _rowToObj_(sheet, rowNumber) };
+}
+
 function _rowToObj_(sheet, rowNumber) {
   const headers = _headers_(sheet);
   const row = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
@@ -1352,14 +1822,25 @@ function _rowToObj_(sheet, rowNumber) {
 /* ========================= Domain helpers ========================= */
 
 function _getStudentById_(studentId) {
-  const sh = _sheet_("STUDENTS");
-  const idx = _findRowByKey_(sh, "student_id", studentId);
-  return idx.rowNumber ? idx.row : null;
+  const targetId = String(studentId || "");
+  return _getAll_("STUDENTS").find(row => String(row.student_id || "") === targetId) || null;
 }
 
 function _getUserByLogin_(login) {
+  const target = _normalizeEmail_(login);
   const rows = _getAll_("USERS");
-  return rows.find(r => (r.login || "") === login) || null;
+  return rows.find(function (row) {
+    return _normalizeEmail_(row.login) === target;
+  }) || null;
+}
+
+function _getUserByEmail_(email) {
+  const target = _normalizeEmail_(email);
+  if (!target) return null;
+  const rows = _getAll_("USERS");
+  return rows.find(function (row) {
+    return _normalizeEmail_(row.email || row.login) === target;
+  }) || null;
 }
 
 function _getUserById_(userId) {
@@ -1369,13 +1850,19 @@ function _getUserById_(userId) {
 
 function _getSessionByToken_(token) {
   const sh = _sheet_("SESSIONS");
-  const idx = _findRowByKey_(sh, "session_token", token);
+  const headers = _headers_(sh);
+  const key = headers.indexOf("token_hash") !== -1 ? "token_hash" : "session_token";
+  const value = key === "token_hash" ? _sessionTokenHash_(token) : token;
+  const idx = _findRowByKeyText_(sh, key, value);
   return idx.rowNumber ? idx.row : null;
 }
 
 function _revokeSession_(token) {
   const sh = _sheet_("SESSIONS");
-  const idx = _findRowByKey_(sh, "session_token", token);
+  const headers = _headers_(sh);
+  const key = headers.indexOf("token_hash") !== -1 ? "token_hash" : "session_token";
+  const value = key === "token_hash" ? _sessionTokenHash_(token) : token;
+  const idx = _findRowByKeyText_(sh, key, value);
   if (!idx.rowNumber) return;
 
   idx.row.revoked = "TRUE";
@@ -1388,9 +1875,10 @@ function _updateUserLastLogin_(userId) {
   const idx = _findRowByKey_(sh, "user_id", userId);
   if (!idx.rowNumber) return;
 
-  idx.row.last_login_at = _nowIso_();
-  idx.row.updated_at = _nowIso_();
-  _updateObjectRow_(sh, idx.rowNumber, idx.row);
+  const now = _nowIso_();
+  _updateObjectFields_(sh, idx.rowNumber, { last_login_at: now, updated_at: now }, [
+    "last_login_at", "updated_at"
+  ]);
 }
 
 /* ========================= Settings ========================= */
@@ -1567,36 +2055,4 @@ function _corsTextOutput_(txt) {
 
 function _error_(msg, code) {
   return _corsJsonOutput_({ ok: false, error: msg, code: code || 500 });
-}
-
-/* ========================= Bootstrap seguro do primeiro usuário =========================
- * Defina temporariamente estas Script Properties antes de executar:
- * - INITIAL_USER_LOGIN
- * - INITIAL_USER_PASSWORD (mínimo 8 caracteres)
- * - INITIAL_USER_ROLE (EDITOR ou VIEWER)
- * A senha é removida das propriedades assim que o usuário é criado.
- */
-function seedInitialUserFromProperties() {
-  const properties = PropertiesService.getScriptProperties();
-  const login = String(properties.getProperty("INITIAL_USER_LOGIN") || "").trim();
-  const password = String(properties.getProperty("INITIAL_USER_PASSWORD") || "");
-  const role = String(properties.getProperty("INITIAL_USER_ROLE") || "EDITOR").toUpperCase();
-
-  if (!login) throw new Error("Configure INITIAL_USER_LOGIN nas propriedades do script");
-  if (password.length < 8) throw new Error("INITIAL_USER_PASSWORD deve ter pelo menos 8 caracteres");
-  if (role !== "EDITOR" && role !== "VIEWER") throw new Error("INITIAL_USER_ROLE deve ser EDITOR ou VIEWER");
-  if (_getUserByLogin_(login)) throw new Error("O login informado já existe");
-
-  let salt = _getSetting_("PASSWORD_SALT", "");
-  if (!salt || salt === "change-me") {
-    salt = _randToken_();
-    _setSetting_("PASSWORD_SALT", salt, "Salt para hash de senha");
-  }
-
-  const now = _nowIso_();
-  _appendRow_("USERS", [
-    _uuid_(), login, _sha256Base64_(salt + ":" + password), role, "TRUE", "", now, now
-  ]);
-  properties.deleteProperty("INITIAL_USER_PASSWORD");
-  Logger.log("Usuário inicial criado com segurança: " + login + " (" + role + ")");
 }
