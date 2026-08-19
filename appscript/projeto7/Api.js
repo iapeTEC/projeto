@@ -50,6 +50,9 @@ const PROFILE_CACHEABLE_SHEETS = Object.freeze({
   USERS: 300
 });
 const PROFILE_SESSION_CACHE_SECONDS = 300;
+const PROFILE_GOOGLE_CLIENT_ID_PROPERTY = "GOOGLE_CLIENT_ID";
+const PROFILE_GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo?id_token=";
+const PROFILE_GOOGLE_IDENTITY_CACHE_SECONDS = 300;
 
 const _sheetRuntimeCache = {};
 const _rowsRuntimeCache = {};
@@ -81,6 +84,7 @@ function _handleRequest_(e, method) {
     if (action === "ping") return _corsJsonOutput_({ ok: true, now: _nowIso_(), version: PROFILE_API_VERSION });
     if (action === "requestLoginCode") return _corsJsonOutput_(_requestLoginCode_(req));
     if (action === "verifyLoginCode") return _corsJsonOutput_(_verifyLoginCode_(req));
+    if (action === "loginWithGoogle") return _corsJsonOutput_(_loginWithGoogle_(req));
 
     // Demais ações exigem autenticação
     const auth = _requireAuth_(req);
@@ -380,6 +384,125 @@ function _verifyLoginCode_(req) {
   _updateUserLastLogin_(user.user_id);
   _auditAuth_(user, "LOGIN_SUCCESS", user, {});
   return session;
+}
+
+/* ========================= Login com conta Google ========================= */
+
+function _googleClientId_() {
+  const value = String(
+    PropertiesService.getScriptProperties().getProperty(PROFILE_GOOGLE_CLIENT_ID_PROPERTY) || ""
+  ).trim();
+  if (!value) {
+    throw new Error(
+      "Login Google indisponível: defina a propriedade de script " +
+      PROFILE_GOOGLE_CLIENT_ID_PROPERTY + " com o Client ID OAuth do site."
+    );
+  }
+  return value;
+}
+
+/**
+ * Confere o ID token emitido pelo Google Identity Services.
+ * O token é público e curto (≈1h), então a validação é feita no Google e o
+ * resultado fica em cache pelo tempo restante — sem isso, cada chamada de login
+ * pagaria um UrlFetch inteiro.
+ */
+function _verifyGoogleIdToken_(idToken) {
+  const token = String(idToken || "");
+  if (token.length < 100 || token.length > 10000) throw new Error("Identidade Google inválida.");
+
+  const cacheKey = PROFILE_CACHE_PREFIX + "gid:" + _sha256Base64_(token);
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (_) {}
+  }
+
+  const clientId = _googleClientId_();
+  let response;
+  try {
+    response = UrlFetchApp.fetch(PROFILE_GOOGLE_TOKENINFO_URL + encodeURIComponent(token), {
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    throw new Error("Não foi possível confirmar sua conta Google agora. Tente novamente.");
+  }
+  if (response.getResponseCode() !== 200) throw new Error("Sessão Google inválida ou expirada.");
+
+  let claims = {};
+  try { claims = JSON.parse(response.getContentText() || "{}"); } catch (_) { claims = {}; }
+
+  if (claims.aud !== clientId) throw new Error("Aplicativo Google inválido.");
+  if (claims.iss !== "accounts.google.com" && claims.iss !== "https://accounts.google.com") {
+    throw new Error("Emissor de identidade inválido.");
+  }
+  const expSeconds = Number(claims.exp || 0);
+  if (!isFinite(expSeconds) || expSeconds * 1000 <= Date.now()) throw new Error("Sessão Google expirada.");
+  if (String(claims.email_verified) !== "true") throw new Error("O e-mail da conta Google não foi verificado.");
+
+  const identity = {
+    email: _normalizeEmail_(claims.email),
+    subject: String(claims.sub || ""),
+    name: String(claims.name || "").slice(0, 160),
+    picture: String(claims.picture || "").slice(0, 500),
+    expires_at: new Date(expSeconds * 1000).toISOString()
+  };
+  if (!identity.email || !identity.subject) throw new Error("Identidade Google incompleta.");
+
+  const ttl = Math.min(
+    PROFILE_GOOGLE_IDENTITY_CACHE_SECONDS,
+    Math.max(30, Math.floor(expSeconds - Date.now() / 1000))
+  );
+  cache.put(cacheKey, JSON.stringify(identity), ttl);
+  return identity;
+}
+
+function _loginWithGoogle_(req) {
+  _ensureAuthSchemaAndOwner_();
+  const identity = _verifyGoogleIdToken_(req.credential || req.id_token || req.identity_token);
+
+  const user = _getUserByEmail_(identity.email);
+  if (!user || String(user.active || "").toUpperCase() !== "TRUE") {
+    _auditAuth_(null, "LOGIN_GOOGLE_DENIED", { email: identity.email }, { subject: identity.subject });
+    return {
+      ok: false,
+      code: 403,
+      error: "A conta " + identity.email + " não tem acesso liberado. Fale com o responsável de TI."
+    };
+  }
+
+  _syncGoogleIdentityOnUser_(user, identity);
+
+  const session = _createSession_(user, req);
+  _updateUserLastLogin_(user.user_id);
+  _auditAuth_(user, "LOGIN_GOOGLE_SUCCESS", user, { subject: identity.subject });
+  return session;
+}
+
+/**
+ * Grava o identificador estável do Google (sub), o nome e a foto no cadastro.
+ * Só escreve quando algo mudou de fato: o login roda a cada entrada e uma
+ * escrita por login custaria uma linha de planilha em toda sessão.
+ */
+function _syncGoogleIdentityOnUser_(user, identity) {
+  const patch = {};
+  const previousSubject = String(user.google_subject || "").trim();
+  if (previousSubject !== identity.subject) {
+    patch.google_subject = identity.subject;
+    if (previousSubject) {
+      _auditAuth_(user, "GOOGLE_SUBJECT_CHANGED", user, { from: previousSubject, to: identity.subject });
+    }
+  }
+  if (identity.name && String(user.display_name || "") !== identity.name) patch.display_name = identity.name;
+  if (identity.picture && String(user.avatar_url || "") !== identity.picture) patch.avatar_url = identity.picture;
+  if (!Object.keys(patch).length) return;
+
+  patch.updated_at = _nowIso_();
+  const sheet = _sheet_("USERS");
+  const found = _findRowByKey_(sheet, "user_id", user.user_id);
+  if (!found.rowNumber) return;
+  _updateObjectFields_(sheet, found.rowNumber, patch, Object.keys(patch));
+  Object.keys(patch).forEach(function (key) { user[key] = patch[key]; });
 }
 
 function _createSession_(user, req) {
@@ -1196,7 +1319,7 @@ function _closestKey_(normName, keys) {
 function _ensureAuthSchemaAndOwner_() {
   if (_profileAuthSchemaReady) return;
   const properties = PropertiesService.getScriptProperties();
-  if (properties.getProperty("AUTH_SCHEMA_VERSION") === "3") {
+  if (properties.getProperty("AUTH_SCHEMA_VERSION") === "4") {
     _profileAuthSchemaReady = true;
     return;
   }
@@ -1204,7 +1327,7 @@ function _ensureAuthSchemaAndOwner_() {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    if (properties.getProperty("AUTH_SCHEMA_VERSION") === "3") {
+    if (properties.getProperty("AUTH_SCHEMA_VERSION") === "4") {
       _profileAuthSchemaReady = true;
       return;
     }
@@ -1212,7 +1335,8 @@ function _ensureAuthSchemaAndOwner_() {
     const usersSheet = _sheet_("USERS");
     const userHeaders = _ensureSheetHeaders_(usersSheet, [
       "user_id", "login", "password_hash", "role", "active", "last_login_at",
-      "created_at", "updated_at", "email", "auth_version", "invited_by", "invited_at"
+      "created_at", "updated_at", "email", "auth_version", "invited_by", "invited_at",
+      "google_subject", "display_name", "avatar_url"
     ]);
     const userValues = usersSheet.getLastRow() >= 2
       ? usersSheet.getRange(2, 1, usersSheet.getLastRow() - 1, userHeaders.length).getValues()
@@ -1261,7 +1385,10 @@ function _ensureAuthSchemaAndOwner_() {
         email: PROFILE_OWNER_EMAIL,
         auth_version: "1",
         invited_by: "SYSTEM",
-        invited_at: now
+        invited_at: now,
+        google_subject: "",
+        display_name: "",
+        avatar_url: ""
       });
     }
 
@@ -1291,7 +1418,7 @@ function _ensureAuthSchemaAndOwner_() {
       "target_email", "details_json", "created_at"
     ]);
 
-    properties.setProperty("AUTH_SCHEMA_VERSION", "3");
+    properties.setProperty("AUTH_SCHEMA_VERSION", "4");
     _profileAuthSchemaReady = true;
   } finally {
     lock.releaseLock();
@@ -1348,7 +1475,9 @@ function _publicUser_(user) {
     active: String(user && user.active || "TRUE").toUpperCase() !== "FALSE",
     last_login_at: String(user && user.last_login_at || ""),
     created_at: String(user && user.created_at || ""),
-    updated_at: String(user && user.updated_at || "")
+    updated_at: String(user && user.updated_at || ""),
+    display_name: String(user && user.display_name || ""),
+    avatar_url: String(user && user.avatar_url || "")
   };
 }
 

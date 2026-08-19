@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#12365d">
+  <title>Fichas de alunos • IAPE</title>
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+  <link rel="dns-prefetch" href="//script.google.com">
+  <link rel="dns-prefetch" href="//script.googleusercontent.com">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="icons/site.webmanifest">
+  <link rel="stylesheet" href="assets/attendance.css">
+  <link rel="stylesheet" href="assets/fichas.css">
+  <script src="assets/config.js"></script>
+  <script src="assets/config2.js"></script>
+  <script src="assets/loading.js"></script>
+  <script src="assets/api.js"></script>
+  <script src="assets/ui.js"></script>
+  <script src="assets/attendance-api.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <nav class="topnav" aria-label="Navegação principal">
+      <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 10.5 16 5l11 5.5L16 16 5 10.5Z" fill="currentColor"/><path d="M9 14v7.2c4.3 3.4 9.7 3.4 14 0V14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M27 11v8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span><span class="brand-copy"><strong>IAPE</strong><small>Gestão Estudantil</small></span></a>
+      <div class="nav-links">
+        <a class="nav-link" href="index.html">Visão geral</a>
+        <a class="nav-link" href="students.html">Alunos</a>
+        <a class="nav-link" href="dashboard.html">Faltas</a>
+        <a class="nav-link is-active" href="fichas.html">Fichas</a>
+        <div id="fichasAccount"></div>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Relatórios</p>
+        <h1>Fichas com foto<br>de quem você escolher</h1>
+        <p class="lead">Filtre, marque os alunos e imprima as fichas em folha A4 — seis por página, com os campos que você decidir mostrar.</p>
+      </div>
+      <div class="hero-aside no-print">
+        <span class="summary-chip" id="fichas-selected">0 alunos selecionados</span>
+        <div class="hero-actions">
+          <a class="btn btn-quiet" href="dashboard.html">Relatório de faltas</a>
+          <button class="btn btn-primary" id="print-fichas" type="button" disabled>Emitir relatório</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="fichas-status" class="status" role="status" aria-live="polite"></div>
+
+    <div class="fichas-layout">
+      <section class="panel no-print">
+        <div class="panel-body fichas-toolbar">
+          <div class="field"><label for="ficha-search">Localizar aluno</label><input type="search" id="ficha-search" placeholder="Digite o nome…" autocomplete="off"></div>
+          <div class="field"><label for="ficha-sector">Setor</label><select id="ficha-sector"><option value="">Todos os setores</option></select></div>
+          <div class="field"><label for="ficha-type">Tipo de bolsa</label><select id="ficha-type"><option value="">Todas as bolsas</option></select></div>
+          <div class="field"><label for="ficha-status">Situação</label><select id="ficha-status"><option value="ACTIVE" selected>Somente ativos</option><option value="INACTIVE">Somente inativos</option><option value="">Todos</option></select></div>
+        </div>
+
+        <div class="fichas-selection-bar">
+          <span class="muted small" id="fichas-count">Carregando…</span>
+          <span class="spacer"></span>
+          <button class="btn btn-quiet" id="select-filtered" type="button">Selecionar os do filtro</button>
+          <button class="btn btn-quiet" id="clear-selection" type="button">Limpar seleção</button>
+        </div>
+
+        <div class="fichas-list" id="fichas-list" aria-live="polite"><div class="empty">Carregando os alunos…</div></div>
+      </section>
+
+      <aside class="panel no-print">
+        <div class="panel-header">
+          <div class="panel-heading-copy"><p class="eyebrow">Conteúdo da ficha</p><h2>O que aparece</h2><p>Só os campos marcados entram na impressão.</p></div>
+        </div>
+        <div class="panel-body">
+          <div class="fichas-options">
+            <label class="fichas-option"><input type="checkbox" data-field="sector" checked> Setor</label>
+            <label class="fichas-option"><input type="checkbox" data-field="scholarship" checked> Tipo de bolsa</label>
+            <label class="fichas-option"><input type="checkbox" data-field="age" checked> Idade</label>
+            <label class="fichas-option"><input type="checkbox" data-field="phone" checked> Telefone</label>
+            <label class="fichas-option"><input type="checkbox" data-field="birth"> Data de nascimento</label>
+            <label class="fichas-option"><input type="checkbox" data-field="sex"> Sexo</label>
+            <label class="fichas-option"><input type="checkbox" data-field="workload"> Carga horária</label>
+            <label class="fichas-option"><input type="checkbox" data-field="situation"> Situação (ativo/inativo)</label>
+            <label class="fichas-option"><input type="checkbox" data-field="registry"> Número de registro</label>
+            <label class="fichas-option"><input type="checkbox" data-field="notes"> Observações</label>
+            <label class="fichas-option"><input type="checkbox" data-field="absences" id="field-absences"> Faltas do período</label>
+          </div>
+          <div class="fichas-period" id="absence-period" hidden>
+            <div class="field"><label for="absence-start">De</label><input type="date" id="absence-start"></div>
+            <div class="field"><label for="absence-end">Até</label><input type="date" id="absence-end"></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div id="print-area" class="print-area"></div>
+  <script src="assets/fichas.js"></script>
+</body>
+</html>

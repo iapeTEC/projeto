@@ -6,13 +6,14 @@ Plataforma acadêmica para acompanhar alunos, bolsas, setores, avaliações, pro
 
 ## Recursos
 
-- Acesso sem senha por e-mail e código temporário.
+- Acesso com a conta Google autorizada — sem senha e sem código por e-mail.
 - Papéis de proprietário/TI, administrador, editor e usuário.
 - Diretório de alunos com filtros, contato e perfil individual.
 - Avaliações formativas, histórico de evolução e relatórios para impressão.
 - Gestão de setores, bolsas, competências e usuários.
 - Lista de chamada com presença, falta e observação.
 - Dashboard de faltas com ranking de alunos, setores clicáveis e relatório para impressão.
+- Relatório de fichas com foto: você escolhe os alunos, escolhe os campos e imprime seis fichas por folha A4.
 - Interface responsiva e instalável como PWA.
 - Barra de progresso, spinner, mensagem da operação e bloqueio do botão durante todas as solicitações.
 
@@ -44,7 +45,8 @@ projeto/
 ├── editor.html            # gestão acadêmica
 ├── escolhersetores.html   # seleção do projeto
 ├── chamada.html           # frequência
-└── dashboard.html         # indicadores de frequência
+├── dashboard.html         # indicadores e relatório de faltas
+└── fichas.html            # relatório de fichas com foto e seleção de alunos
 ```
 
 ## Desempenho
@@ -71,6 +73,12 @@ As telas continuam sujeitas ao tempo de inicialização a frio do Apps Script, m
 - Configurações e clientes da API usam atualização pela rede no service worker, evitando JavaScript antigo após uma publicação.
 - As 173 fotos possuem versões WebP de 128 px. O conjunto usado nos avatares caiu de aproximadamente 38,7 MB para 315 KB.
 - As antigas páginas duplicadas de setores redirecionam para uma única tela parametrizada.
+- A primeira chamada de cada tela ao Apps Script parte assim que `assets/api.js` carrega, antes do CSS de terceiros e do script da página. Quem pedir o mesmo par ação+payload depois recebe a mesma promessa, sem requisição extra.
+- Bootstrap e Chart.js carregam com `defer`: deixaram de ficar na frente do script que dispara a primeira chamada ao Google.
+- As páginas que usam CDN aquecem `cdn.jsdelivr.net` com `preconnect`.
+- A tela de acesso não carrega mais Bootstrap: ficaram só o CSS do aplicativo e o cliente do Google.
+- O diretório de alunos e o relatório de fichas usam o mesmo par ação+payload e, portanto, o mesmo cache — trocar de tela não custa uma nova leitura da planilha.
+- A verificação do ID token do Google fica em cache no Apps Script, então uma sequência de chamadas não paga um `UrlFetch` por requisição.
 
 ## Interface
 
@@ -88,7 +96,11 @@ A identidade visual foi refeita para apresentar o sistema como uma plataforma ac
 
 ## Acesso e papéis
 
-O login não usa senha. A pessoa informa um e-mail previamente autorizado e recebe um código de seis dígitos, válido por dez minutos. A sessão fica somente na aba atual do navegador e o token é armazenado como hash na planilha.
+O login é feito com a conta Google, no mesmo desenho usado pelo MyTask. A pessoa clica em **Entrar com o Google**, o navegador recebe um ID token do Google Identity Services e o Apps Script confirma esse token direto no Google (`oauth2.googleapis.com/tokeninfo`), conferindo emissor, validade, e-mail verificado e se o token foi emitido para **este** aplicativo. Só depois disso o backend procura o e-mail na aba `USERS`: conta não cadastrada ou desativada não recebe sessão nenhuma.
+
+O sistema nunca vê a senha da pessoa. A sessão continua sendo o mesmo token opaco de antes — guardado apenas na aba atual do navegador e gravado como hash na planilha —, então o módulo de frequência segue validando exatamente como já validava.
+
+O login por código de e-mail saiu da tela, mas as rotas `requestLoginCode`/`verifyLoginCode` continuam no Apps Script como resgate caso o acesso Google fique indisponível.
 
 O proprietário inicial é `normafederal@gmail.com`. Ele é criado automaticamente e de forma idempotente na primeira solicitação de código. Na área **Gestão → Acessos**, somente esse proprietário pode cadastrar e-mails, alterar papéis, ativar/desativar contas e revogar sessões.
 
@@ -99,7 +111,18 @@ O proprietário inicial é `normafederal@gmail.com`. Ele é criado automaticamen
 | `EDITOR` | Edição acadêmica, chamadas e relatórios |
 | `USER` | Consultas, perfis e dashboard de faltas |
 
-Na primeira publicação que inclui o envio de código, o proprietário do Apps Script deve selecionar e executar `authorizeMailForLogin()` uma vez no editor. A função abre o consentimento do `MailApp`, confirma a cota e não envia mensagem.
+### Configurar o login Google
+
+1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials), em **Credenciais → Criar credenciais → ID do cliente OAuth**, escolha **Aplicativo da Web**.
+2. Em **Origens JavaScript autorizadas**, informe `https://iapetec.github.io` (e `http://localhost:8080` para testar na máquina). Este fluxo não usa redirecionamento, então **URIs de redirecionamento** pode ficar vazio.
+3. Copie o Client ID gerado para os **dois** lugares, com o mesmo valor:
+   - `assets/config.js`, em `GOOGLE_CLIENT_ID`;
+   - Apps Script de perfis, em **Configurações do projeto → Propriedades do script**, na propriedade `GOOGLE_CLIENT_ID`.
+4. Publique uma nova versão do Web App de perfis e um novo deploy do GitHub Pages.
+
+O Client ID é público por natureza — quem protege o sistema é a conferência do token no Google somada à exigência de cadastro prévio em `USERS`. Guardar o mesmo valor nos dois lados é o que garante que um token emitido para outro aplicativo seja recusado.
+
+Se o envio de código for reativado como resgate, o proprietário do Apps Script precisa executar `authorizeMailForLogin()` uma vez no editor. A função abre o consentimento do `MailApp`, confirma a cota e não envia mensagem.
 
 ## Apps Script
 

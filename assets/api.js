@@ -7,7 +7,7 @@
     user: 'session_user',
     expiresAt: 'session_expires_at'
   });
-  const PUBLIC_ACTIONS = new Set(['ping', 'requestLoginCode', 'verifyLoginCode']);
+  const PUBLIC_ACTIONS = new Set(['ping', 'requestLoginCode', 'verifyLoginCode', 'loginWithGoogle']);
   const READ_CACHE_MS = Object.freeze({
     listSectors: 10 * 60 * 1000,
     listScholarshipTypes: 10 * 60 * 1000,
@@ -160,6 +160,7 @@
   function requestLabel(action) {
     const labels = {
       requestLoginCode: 'Enviando seu código…', verifyLoginCode: 'Validando seu acesso…',
+      loginWithGoogle: 'Confirmando sua conta Google…',
       me: 'Confirmando sua sessão…', logout: 'Encerrando sessão…', listUsers: 'Carregando acessos…',
       upsertUser: 'Salvando acesso…', revokeUserSessions: 'Revogando sessões…',
       listStudents: 'Buscando alunos…', listSectors: 'Carregando setores…',
@@ -317,7 +318,28 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
+  // O custo dominante de cada tela é a primeira ida ao Apps Script (inicialização
+  // a frio de segundos). Disparar aqui — antes do Bootstrap do CDN e do script da
+  // página — adianta esse relógio. Quem pedir o mesmo par ação+payload depois
+  // recebe exatamente esta promessa, então não existe requisição duplicada.
+  const FIRST_CALL_BY_PAGE = Object.freeze({
+    'index.html': ['getHomeOverview', {}],
+    'students.html': ['getStudentDirectory', { filters: {}, include_meta: 'TRUE' }],
+    'fichas.html': ['getStudentDirectory', { filters: {}, include_meta: 'TRUE' }],
+    'editor.html': ['getEditorBootstrap', {}]
+  });
+
+  function warmFirstCall() {
+    const page = window.location.pathname.split('/').pop() || 'index.html';
+    const first = FIRST_CALL_BY_PAGE[page];
+    // Sem sessão a chamada só renderia um 401 e um redirecionamento precoce.
+    if (!first || !getToken() || !getUser()) return;
+    apiPost(first[0], first[1]).catch(function () {});
+  }
+
   clearLegacySession();
+
+  warmFirstCall();
 
   window.Api = {
     apiPost: apiPost,

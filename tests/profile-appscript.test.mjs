@@ -187,3 +187,102 @@ test('sessões com expiração inválida ou vencida falham fechadas', () => {
   assert.match(apiSource, /const expiresAt = new Date\(sess\.expires_at\)\.getTime\(\);\s*if \(!isFinite\(expiresAt\) \|\| expiresAt <= Date\.now\(\)\) throw new Error\("Session expired"\)/);
   assert.match(apiSource, /const expiresAt = new Date\(cached\.session\.expires_at\)\.getTime\(\);\s*if \(!isFinite\(expiresAt\) \|\| expiresAt <= Date\.now\(\)\) return null/);
 });
+
+function withGoogleStubs(claims, { responseCode = 200, clientId = 'client-abc.apps.googleusercontent.com' } = {}) {
+  const cache = new Map();
+  const fetched = [];
+  profileContext.PropertiesService = {
+    getScriptProperties: () => ({
+      getProperty: name => (name === 'GOOGLE_CLIENT_ID' ? clientId : null),
+      setProperty() {}
+    })
+  };
+  profileContext.CacheService = {
+    getScriptCache: () => ({
+      get: key => (cache.has(key) ? cache.get(key) : null),
+      put: (key, value) => cache.set(key, value),
+      remove: key => cache.delete(key)
+    })
+  };
+  profileContext.UrlFetchApp = {
+    fetch(url) {
+      fetched.push(url);
+      return {
+        getResponseCode: () => responseCode,
+        getContentText: () => JSON.stringify(claims)
+      };
+    }
+  };
+  return { cache, fetched };
+}
+
+const validClaims = () => ({
+  aud: 'client-abc.apps.googleusercontent.com',
+  iss: 'https://accounts.google.com',
+  exp: Math.floor(Date.now() / 1000) + 1800,
+  email: 'Pessoa@IAPE.Tech',
+  email_verified: 'true',
+  sub: '110000000000000000001',
+  name: 'Pessoa Autorizada',
+  picture: 'https://lh3.googleusercontent.com/foto'
+});
+
+const longToken = 'x'.repeat(400);
+
+// assert.throws compara com instanceof, e os erros nascem dentro do vm — outro
+// realm, outro Error. Aqui basta saber que recusou (e, se pedido, com qual texto).
+function recusou(run, expectedMessage) {
+  try {
+    run();
+    return false;
+  } catch (error) {
+    return expectedMessage ? expectedMessage.test(String(error && error.message)) : true;
+  }
+}
+
+test('login Google aceita apenas token do próprio aplicativo, emitido pelo Google e no prazo', () => {
+  const ok = withGoogleStubs(validClaims());
+  const identity = profileContext._verifyGoogleIdToken_(longToken);
+  assert.equal(identity.email, 'pessoa@iape.tech');
+  assert.equal(identity.subject, '110000000000000000001');
+  assert.equal(identity.name, 'Pessoa Autorizada');
+  assert.equal(ok.fetched.length, 1);
+
+  // O mesmo token não paga um segundo UrlFetch: a identidade fica em cache.
+  profileContext._verifyGoogleIdToken_(longToken);
+  assert.equal(ok.fetched.length, 1);
+
+  const recusas = [
+    ['audiência de outro aplicativo', { ...validClaims(), aud: 'outro.apps.googleusercontent.com' }],
+    ['emissor falso', { ...validClaims(), iss: 'https://evil.example.com' }],
+    ['token vencido', { ...validClaims(), exp: Math.floor(Date.now() / 1000) - 10 }],
+    ['e-mail não verificado', { ...validClaims(), email_verified: 'false' }],
+    ['identidade incompleta', { ...validClaims(), sub: '' }]
+  ];
+  for (const [motivo, claims] of recusas) {
+    withGoogleStubs(claims);
+    assert.equal(recusou(() => profileContext._verifyGoogleIdToken_('y'.repeat(400))), true, motivo);
+  }
+
+  withGoogleStubs(validClaims(), { responseCode: 401 });
+  assert.equal(recusou(() => profileContext._verifyGoogleIdToken_('z'.repeat(400))), true, 'resposta 401 do Google');
+
+  // Sem Client ID configurado o login recusa em vez de aceitar qualquer token.
+  profileContext.PropertiesService = {
+    getScriptProperties: () => ({ getProperty: () => '', setProperty() {} })
+  };
+  assert.equal(recusou(() => profileContext._googleClientId_(), /GOOGLE_CLIENT_ID/), true);
+});
+
+test('rota de login Google é pública e o cadastro guarda a identidade da conta', () => {
+  assert.match(apiSource, /action === "loginWithGoogle"/);
+  // Precisa ficar acima de _requireAuth_: quem entra ainda não tem sessão.
+  assert.ok(
+    apiSource.indexOf('action === "loginWithGoogle"') < apiSource.indexOf('const auth = _requireAuth_(req);'),
+    'loginWithGoogle deve ser resolvida antes da exigência de sessão'
+  );
+  assert.match(apiSource, /"google_subject", "display_name", "avatar_url"/);
+  assert.match(apiSource, /AUTH_SCHEMA_VERSION", "4"/);
+  // Conta sem cadastro ou desativada não recebe sessão.
+  assert.match(apiSource, /if \(!user \|\| String\(user\.active \|\| ""\)\.toUpperCase\(\) !== "TRUE"\)/);
+});

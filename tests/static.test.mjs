@@ -50,19 +50,52 @@ test('editor seleciona alunos sem expor ID ou usar modais aninhados', async () =
   assert.match(script, /clear_birth_date/);
 });
 
-test('login passwordless usa e-mail, código temporário e sessão por aba', async () => {
+test('acesso usa conta Google, sem senha e sem código, com sessão por aba', async () => {
   const html = await readFile(resolve(root, 'login.html'), 'utf8');
   const api = await readFile(resolve(root, 'assets/api.js'), 'utf8');
-  assert.match(html, /id="email"[^>]+type="email"/);
-  assert.match(html, /id="loginCode"[^>]+autocomplete="one-time-code"/);
-  assert.match(html, /apiPost\('requestLoginCode', \{ email: email \}\)/);
-  assert.match(html, /apiPost\('verifyLoginCode', payload\)/);
-  assert.doesNotMatch(html, /type="password"|current-password|apiPost\(["']login["']/);
+  const config = await readFile(resolve(root, 'assets/config.js'), 'utf8');
+
+  assert.match(html, /https:\/\/accounts\.google\.com\/gsi\/client/);
+  assert.match(html, /google\.accounts\.id\.initialize\(/);
+  assert.match(html, /client_id: config\.GOOGLE_CLIENT_ID/);
+  assert.match(html, /google\.accounts\.id\.renderButton\(/);
+  assert.match(html, /apiPost\('loginWithGoogle', \{ credential: credential \}\)/);
+  assert.match(config, /GOOGLE_CLIENT_ID/);
+
+  // Nada de senha, código temporário ou Bootstrap na porta de entrada.
+  assert.doesNotMatch(html, /type="password"|current-password|one-time-code/);
+  assert.doesNotMatch(html, /requestLoginCode|verifyLoginCode/);
+  assert.doesNotMatch(html, /cdn\.jsdelivr\.net\/npm\/bootstrap/i);
+
+  // Sair não pode ser desfeito pela entrada automática do Google.
+  assert.match(html, /auto_select: !justSignedOut/);
+
+  assert.match(api, /loginWithGoogle/);
   assert.match(api, /sessionStorage\.setItem\(key, value\)/);
   assert.match(api, /localStorage\.removeItem\(SESSION_KEYS\[name\]\)/);
-  assert.doesNotMatch(api, /localStorage\.setItem\(/);
   assert.match(api, /user_id \|\| user\.email/);
   assert.match(api, /handleAuthFailure/);
+});
+
+test('relatório de fichas deixa escolher alunos, campos e imprime 6 por página', async () => {
+  const html = await readFile(resolve(root, 'fichas.html'), 'utf8');
+  const script = await readFile(resolve(root, 'assets/fichas.js'), 'utf8');
+
+  assert.match(script, /requireCapability\(window\.UI\.CAPABILITIES\.VIEW_ACADEMIC\)/);
+  assert.match(script, /const FICHAS_PER_PAGE = 6/);
+  assert.match(script, /apiPost\('getStudentDirectory'/);
+  assert.match(script, /img\/optimized\/.*\.webp/);
+
+  // Seleção por aluno e atalhos de seleção em massa.
+  assert.match(html, /id="select-filtered"/);
+  assert.match(html, /id="clear-selection"/);
+  assert.match(html, /id="fichas-list"/);
+
+  // Campos opcionais da ficha, incluindo as faltas do período.
+  for (const field of ['sector', 'scholarship', 'age', 'phone', 'birth', 'sex', 'workload', 'notes', 'absences']) {
+    assert.match(html, new RegExp(`data-field="${field}"`), field);
+  }
+  assert.match(script, /getDashboard\(\{[\s\S]*faltas: '1'/);
 });
 
 test('RBAC expõe quatro papéis e gestão de acesso somente ao proprietário', async () => {

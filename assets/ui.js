@@ -126,9 +126,23 @@
         : task();
       Promise.resolve(runner).finally(function () {
         window.Api.clearSession();
+        // Marca a saída para a tela de acesso não reentrar sozinha com a mesma
+        // conta Google — quem clica em "Sair" quer escolher a conta de novo.
+        try { localStorage.setItem('iape_signed_out', '1'); } catch (storageError) {}
         window.location.replace('login.html');
       });
     });
+  }
+
+  function accountAvatar(user) {
+    const photo = String(user && user.avatar_url || '').trim();
+    if (/^https:\/\//.test(photo)) {
+      // referrerpolicy: sem ele o googleusercontent devolve 403 para o GitHub Pages.
+      return '<img class="nav-account-avatar nav-account-photo" src="' + window.Api.esc(photo) +
+        '" alt="" width="32" height="32" loading="lazy" decoding="async" referrerpolicy="no-referrer">';
+    }
+    const letter = String(user && (user.display_name || user.email) || 'U').charAt(0).toUpperCase();
+    return '<span class="nav-account-avatar" aria-hidden="true">' + window.Api.esc(letter) + '</span>';
   }
 
   function mountNav(active) {
@@ -146,7 +160,8 @@
       ? '<li class="nav-item"><a class="nav-link" href="escolhersetores.html">Chamadas</a></li>'
       : '';
     const email = String(user.email || '');
-    const avatar = email.charAt(0).toUpperCase() || 'U';
+    const avatar = accountAvatar(user);
+    const displayName = String(user.display_name || '').trim() || email;
     const brandIcon = '<span class="app-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 10.5 16 5l11 5.5L16 16 5 10.5Z" fill="currentColor"/><path d="M9 14v7.2c4.3 3.4 9.7 3.4 14 0V14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M27 11v8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>';
 
     nav.innerHTML = '<nav class="navbar navbar-expand-lg navbar-light no-print academic-navbar">' +
@@ -156,10 +171,11 @@
       '<div class="collapse navbar-collapse" id="navMain"><ul class="navbar-nav me-auto mb-2 mb-lg-0">' +
       '<li class="nav-item"><a class="nav-link ' + (active === 'home' ? 'active' : '') + '" href="index.html">Visão geral</a></li>' +
       '<li class="nav-item"><a class="nav-link ' + (active === 'students' ? 'active' : '') + '" href="students.html">Alunos</a></li>' +
-      '<li class="nav-item"><a class="nav-link" href="dashboard.html">Frequência</a></li>' + attendanceEntry +
-      academicManagement + accessManagement + '</ul><div class="nav-account"><span class="nav-account-avatar" aria-hidden="true">' +
-      window.Api.esc(avatar) + '</span><span class="nav-account-copy"><strong title="' + window.Api.esc(email) + '">' +
-      window.Api.esc(email) + '</strong><small>' + window.Api.esc(roleLabel(user.role)) + '</small></span>' +
+      '<li class="nav-item"><a class="nav-link" href="dashboard.html">Frequência</a></li>' +
+      '<li class="nav-item"><a class="nav-link ' + (active === 'fichas' ? 'active' : '') + '" href="fichas.html">Fichas</a></li>' + attendanceEntry +
+      academicManagement + accessManagement + '</ul><div class="nav-account">' + avatar +
+      '<span class="nav-account-copy"><strong title="' + window.Api.esc(email) + '">' +
+      window.Api.esc(displayName) + '</strong><small>' + window.Api.esc(roleLabel(user.role)) + '</small></span>' +
       '<button class="btn btn-outline-secondary btn-sm nav-logout" id="btnLogout" type="button">Sair</button></div></div></div></nav>';
     bindLogout(document.getElementById('btnLogout'));
   }
@@ -169,7 +185,8 @@
     const user = suppliedUser || getUser();
     if (!element || !user) return;
     element.className = 'attendance-account';
-    element.innerHTML = '<span class="attendance-account-copy"><strong>' + window.Api.esc(user.email) +
+    element.innerHTML = '<span class="attendance-account-copy"><strong>' +
+      window.Api.esc(String(user.display_name || '').trim() || user.email) +
       '</strong><small>' + window.Api.esc(roleLabel(user.role)) + '</small></span>' +
       '<button class="nav-logout-button" type="button">Sair</button>';
     bindLogout(element.querySelector('button'));

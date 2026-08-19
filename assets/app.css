@@ -497,6 +497,7 @@ body.page-soft[data-page="editor"] .tile-btn:focus{
 .academic-navbar .nav-link.active{color:var(--navy)!important;background:#e9f1fb;box-shadow:inset 0 0 0 1px #d7e5f5}
 .nav-account{display:flex;align-items:center;gap:.65rem}
 .nav-account-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#e7f3f1;color:#087267;font-weight:850}
+.nav-account-photo{object-fit:cover;background:#e7f3f1}
 .nav-account-copy{display:grid;min-width:84px;max-width:220px;line-height:1.05}
 .nav-account-copy strong{overflow:hidden;text-overflow:ellipsis;font-size:.82rem;color:#24364a}.nav-account-copy small{margin-top:4px;color:var(--muted);font-size:.67rem}
 .nav-logout{border-color:#d7e0e9;color:#506176}
