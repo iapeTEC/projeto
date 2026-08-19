@@ -44,11 +44,12 @@ function loadWorker(fetchImpl, initialCache = new Map()) {
 }
 
 test('service worker mantém o shell completo e renova clientes/configurações pela rede', () => {
-  assert.match(workerSource, /iape-gestao-estudantil-v8/);
+  assert.match(workerSource, /iape-gestao-estudantil-v9/);
   const requiredShellFiles = [
     'login.html', 'index.html', 'students.html', 'student.html', 'sponsor.html', 'editor.html',
-    'escolhersetores.html', 'chamada.html', 'dashboard.html', 'assets/config.js',
-    'assets/config2.js', 'assets/api.js', 'assets/attendance-api.js', 'assets/dashboard.js'
+    'escolhersetores.html', 'chamada.html', 'dashboard.html', 'fichas.html', 'assets/config.js',
+    'assets/config2.js', 'assets/api.js', 'assets/attendance-api.js', 'assets/dashboard.js',
+    'assets/fichas.js', 'assets/fichas.css'
   ];
   requiredShellFiles.forEach(file => assert.match(workerSource, new RegExp(`['"]\\./${file.replaceAll('.', '\\.')}`), file));
 
@@ -110,7 +111,7 @@ test('diretório prefere WebP leve e conserva PNG e iniciais como fallback', () 
 test('páginas que consultam os Web Apps aquecem os dois hosts do Google', async () => {
   const pages = [
     'login.html', 'index.html', 'editor.html', 'students.html', 'student.html', 'sponsor.html',
-    'escolhersetores.html', 'chamada.html', 'dashboard.html'
+    'escolhersetores.html', 'chamada.html', 'dashboard.html', 'fichas.html'
   ];
   for (const page of pages) {
     const html = await readFile(new URL('../' + page, import.meta.url), 'utf8');
