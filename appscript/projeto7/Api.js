@@ -57,7 +57,7 @@ const PROFILE_GOOGLE_CLIENT_ID_PROPERTY = "GOOGLE_CLIENT_ID";
 // sem um passo manual no console que, esquecido, derruba todo o acesso.
 // A propriedade de script continua tendo prioridade, para trocar sem publicar.
 const PROFILE_DEFAULT_GOOGLE_CLIENT_ID =
-  "433057640119-c5l0o9j0qr6nl1lq2rkqudlnsqdr475s.apps.googleusercontent.com";
+  "611072302986-lsk02a3590hnub6u9kq1jonhr65tc7ec.apps.googleusercontent.com";
 const PROFILE_GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo?id_token=";
 const PROFILE_GOOGLE_IDENTITY_CACHE_SECONDS = 300;
 

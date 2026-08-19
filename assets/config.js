@@ -8,7 +8,7 @@
 // script GOOGLE_CLIENT_ID do Apps Script de perfis, senão o login é recusado.
 window.PROFILE_APP_CONFIG = Object.freeze({
   API_URL: "https://script.google.com/macros/s/AKfycbxmT11Whtdb0YWb8sJ9XPonhUg6sIBg-fu0oLFqJparPAUAT2XQll3OFKizFSbp2usMmQ/exec",
-  GOOGLE_CLIENT_ID: "433057640119-c5l0o9j0qr6nl1lq2rkqudlnsqdr475s.apps.googleusercontent.com",
+  GOOGLE_CLIENT_ID: "611072302986-lsk02a3590hnub6u9kq1jonhr65tc7ec.apps.googleusercontent.com",
   APP_NAME: "IAPE • Gestão Estudantil",
   THEME_COLOR: "#12365d"
 });
