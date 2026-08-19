@@ -119,8 +119,13 @@ O proprietário inicial é `normafederal@gmail.com`. Ele é criado automaticamen
    - `assets/config.js`, em `GOOGLE_CLIENT_ID`;
    - Apps Script de perfis, em **Configurações do projeto → Propriedades do script**, na propriedade `GOOGLE_CLIENT_ID`.
 4. Publique uma nova versão do Web App de perfis e um novo deploy do GitHub Pages.
+5. **Abra o editor do Apps Script de perfis e execute `authorizeGoogleLogin()` uma vez**, aceitando a permissão pedida.
 
-O Client ID é público por natureza — quem protege o sistema é a conferência do token no Google somada à exigência de cadastro prévio em `USERS`. Guardar o mesmo valor nos dois lados é o que garante que um token emitido para outro aplicativo seja recusado.
+O passo 5 não é opcional e não dá para automatizar. A verificação do token usa `UrlFetchApp`, e o Apps Script só passa a exigir o escopo de requisição externa quando o código usa esse serviço — uma autorização concedida antes disso não o inclui. Sem executar a função, todo login falha com a mensagem *"o Apps Script ainda não tem permissão para requisições externas"*. A função faz uma chamada com um token falso só para abrir o consentimento; HTTP 400 na resposta é o resultado esperado.
+
+O Client ID também fica versionado em `appscript/projeto7/Api.js`, em `PROFILE_DEFAULT_GOOGLE_CLIENT_ID`, para que publicar o Web App já deixe o login pronto. A propriedade de script continua tendo prioridade, então dá para trocar o valor sem publicar código.
+
+O Client ID é público por natureza — quem protege o sistema é a conferência do token no Google somada à exigência de cadastro prévio em `USERS`. O client secret desse fluxo não é usado em lugar nenhum: se ele já foi gerado, pode ser redefinido no console sem afetar o acesso.
 
 Se o envio de código for reativado como resgate, o proprietário do Apps Script precisa executar `authorizeMailForLogin()` uma vez no editor. A função abre o consentimento do `MailApp`, confirma a cota e não envia mensagem.
 

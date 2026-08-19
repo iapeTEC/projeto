@@ -267,11 +267,18 @@ test('login Google aceita apenas token do próprio aplicativo, emitido pelo Goog
   withGoogleStubs(validClaims(), { responseCode: 401 });
   assert.equal(recusou(() => profileContext._verifyGoogleIdToken_('z'.repeat(400))), true, 'resposta 401 do Google');
 
-  // Sem Client ID configurado o login recusa em vez de aceitar qualquer token.
+  // Sem propriedade de script, vale o Client ID versionado no código — publicar
+  // o Web App já deixa o login pronto, sem um passo manual no console.
   profileContext.PropertiesService = {
     getScriptProperties: () => ({ getProperty: () => '', setProperty() {} })
   };
-  assert.equal(recusou(() => profileContext._googleClientId_(), /GOOGLE_CLIENT_ID/), true);
+  assert.match(profileContext._googleClientId_(), /^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/);
+
+  // A propriedade de script continua tendo prioridade, para trocar sem publicar.
+  profileContext.PropertiesService = {
+    getScriptProperties: () => ({ getProperty: () => 'trocado.apps.googleusercontent.com', setProperty() {} })
+  };
+  assert.equal(profileContext._googleClientId_(), 'trocado.apps.googleusercontent.com');
 });
 
 test('rota de login Google é pública e o cadastro guarda a identidade da conta', () => {

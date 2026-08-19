@@ -51,6 +51,13 @@ const PROFILE_CACHEABLE_SHEETS = Object.freeze({
 });
 const PROFILE_SESSION_CACHE_SECONDS = 300;
 const PROFILE_GOOGLE_CLIENT_ID_PROPERTY = "GOOGLE_CLIENT_ID";
+// Client ID OAuth do site. Fica aqui no código, e não só numa propriedade de
+// script, porque ele é público por natureza (o navegador precisa dele para
+// pedir o token) e porque assim publicar o Web App já deixa o login pronto,
+// sem um passo manual no console que, esquecido, derruba todo o acesso.
+// A propriedade de script continua tendo prioridade, para trocar sem publicar.
+const PROFILE_DEFAULT_GOOGLE_CLIENT_ID =
+  "433057640119-c5l0o9j0qr6nl1lq2rkqudlnsqdr475s.apps.googleusercontent.com";
 const PROFILE_GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo?id_token=";
 const PROFILE_GOOGLE_IDENTITY_CACHE_SECONDS = 300;
 
@@ -389,9 +396,10 @@ function _verifyLoginCode_(req) {
 /* ========================= Login com conta Google ========================= */
 
 function _googleClientId_() {
-  const value = String(
+  const override = String(
     PropertiesService.getScriptProperties().getProperty(PROFILE_GOOGLE_CLIENT_ID_PROPERTY) || ""
   ).trim();
+  const value = override || PROFILE_DEFAULT_GOOGLE_CLIENT_ID;
   if (!value) {
     throw new Error(
       "Login Google indisponível: defina a propriedade de script " +
@@ -425,6 +433,15 @@ function _verifyGoogleIdToken_(idToken) {
       muteHttpExceptions: true
     });
   } catch (err) {
+    // Falta de escopo e queda de rede chegam aqui do mesmo jeito. Separar as
+    // duas é o que transforma "não foi possível confirmar" numa instrução.
+    const detail = String((err && err.message) || err);
+    if (/permission|permiss|authoriz|autoriza|escopo|scope/i.test(detail)) {
+      throw new Error(
+        "Login Google indisponível: o Apps Script ainda não tem permissão para " +
+        "requisições externas. Execute authorizeGoogleLogin() uma vez no editor."
+      );
+    }
     throw new Error("Não foi possível confirmar sua conta Google agora. Tente novamente.");
   }
   if (response.getResponseCode() !== 200) throw new Error("Sessão Google inválida ou expirada.");
@@ -455,6 +472,22 @@ function _verifyGoogleIdToken_(idToken) {
   );
   cache.put(cacheKey, JSON.stringify(identity), ttl);
   return identity;
+}
+
+/**
+ * Execute uma vez no editor depois de publicar o login Google.
+ * O Apps Script só passa a exigir o escopo de requisição externa quando o
+ * código usa UrlFetchApp — uma autorização concedida antes disso não o inclui,
+ * e a verificação do token falha. Esta função abre o consentimento e confirma
+ * que a chamada externa passa. HTTP 400 aqui é o esperado: o token é falso.
+ */
+function authorizeGoogleLogin() {
+  const response = UrlFetchApp.fetch(PROFILE_GOOGLE_TOKENINFO_URL + "token-de-teste", {
+    muteHttpExceptions: true
+  });
+  const code = response.getResponseCode();
+  console.log("Requisição externa liberada. O Google respondeu HTTP " + code + " (400 é o esperado).");
+  return code;
 }
 
 function _loginWithGoogle_(req) {
